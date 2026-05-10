@@ -1,0 +1,44 @@
+[
+  {
+    "filename": "intro_getting_started.mp4",
+    "title": "Getting Started with OmniBioAI",
+    "desc": "Complete walkthrough of the platform — setup, configuration and first run.",
+    "tag": "intro",
+    "order": 1
+  },
+  {
+    "filename": "tutorial_rnaseq_workflow.mp4",
+    "title": "RNA-Seq Analysis End-to-End",
+    "desc": "From raw FASTQ files to differential expression results using the Workflow Runner.",
+    "tag": "tutorial",
+    "order": 2
+  },
+  {
+    "filename": "demo_single_cell.mp4",
+    "title": "Single Cell RNA-Seq with Scanpy",
+    "desc": "Clustering, UMAP visualization and marker identification on 10X Genomics data.",
+    "tag": "demo",
+    "order": 3
+  },
+  {
+    "filename": "workflow_variant_calling.mp4",
+    "title": "Variant Calling Pipeline",
+    "desc": "BWA + GATK HaplotypeCaller pipeline with annotation via SnpEff.",
+    "tag": "workflow",
+    "order": 4
+  },
+  {
+    "filename": "hpc_slurm_setup.mp4",
+    "title": "Running Jobs on HPC with Slurm",
+    "desc": "Configure TES to submit bioinformatics jobs to your institutional cluster.",
+    "tag": "hpc",
+    "order": 5
+  },
+  {
+    "filename": "my_video.mov",
+    "title": "My Video Title",
+    "desc": "Description here.",
+    "tag": "demo",
+    "order": 6
+  }
+]
