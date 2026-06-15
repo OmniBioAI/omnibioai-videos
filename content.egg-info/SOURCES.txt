@@ -1,0 +1,9 @@
+README.md
+pyproject.toml
+content.egg-info/PKG-INFO
+content.egg-info/SOURCES.txt
+content.egg-info/dependency_links.txt
+content.egg-info/top_level.txt
+tests/test_generated_infra.py
+tests/test_manifest.py
+tests/test_video_service.py
