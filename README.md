@@ -328,3 +328,7 @@ docker compose logs videos --tail=20
 ## License
 
 Apache 2.0 — see root `LICENSE` file.
+
+---
+
+*Part of the [OmniBioAI](https://github.com/man4ish/omnibioai-studio) platform.*
