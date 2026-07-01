@@ -35,10 +35,38 @@
     "order": 5
   },
   {
-    "filename": "my_video.mov",
-    "title": "My Video Title",
-    "desc": "Description here.",
+    "filename": "demo_literature_ai.mp4",
+    "title": "Literature AI — Search 36M PubMed Papers",
+    "desc": "9-stage RAG pipeline demo — hybrid search, re-ranking and LLM reasoning over 36M abstracts.",
     "tag": "demo",
     "order": 6
+  },
+  {
+    "filename": "demo_lab_integrations.mp4",
+    "title": "Lab Integrations — Benchling, REDCap & eLabFTW",
+    "desc": "Import samples from Benchling, patient cohorts from REDCap, and export results to eLabFTW ELN.",
+    "tag": "demo",
+    "order": 7
+  },
+  {
+    "filename": "demo_variant_annotation.mp4",
+    "title": "Variant Annotation — gnomAD, ClinVar & COSMIC",
+    "desc": "Annotate VCF files locally with population frequencies, clinical significance and cancer mutations.",
+    "tag": "demo",
+    "order": 8
+  },
+  {
+    "filename": "demo_drug_discovery.mp4",
+    "title": "Drug Discovery & Target Identification",
+    "desc": "GNN-based drug-target interaction prediction and pathway-level disease modeling.",
+    "tag": "demo",
+    "order": 9
+  },
+  {
+    "filename": "demo_control_center.mp4",
+    "title": "Control Center & Platform Monitoring",
+    "desc": "Real-time health dashboard for 26+ microservices, Grafana metrics and Discord alerts.",
+    "tag": "demo",
+    "order": 10
   }
 ]
