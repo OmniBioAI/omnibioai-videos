@@ -10,7 +10,7 @@ Serves tutorial videos, workflow demonstrations, and the interactive Getting Sta
 
 | Item | Value |
 |------|-------|
-| Image | `ghcr.io/man4ish/omnibioai-videos:latest` |
+| Image | `ghcr.io/omnibioai/omnibioai-videos:latest` |
 | Port | `8086` |
 | Base image | `nginx:alpine` |
 | Dependencies | None |
@@ -161,8 +161,8 @@ To redeploy after editing:
 
 ```bash
 cd /home/manish/Desktop/machine/omnibioai-videos
-docker build -t ghcr.io/man4ish/omnibioai-videos:latest .
-docker push ghcr.io/man4ish/omnibioai-videos:latest
+docker build -t ghcr.io/omnibioai/omnibioai-videos:latest .
+docker push ghcr.io/omnibioai/omnibioai-videos:latest
 
 cd /home/manish/Desktop/machine/omnibioai-studio
 docker compose up -d --force-recreate videos
@@ -207,13 +207,13 @@ Key behaviours:
 
 ```bash
 cd /home/manish/Desktop/machine/omnibioai-videos
-docker build -t ghcr.io/man4ish/omnibioai-videos:latest .
+docker build -t ghcr.io/omnibioai/omnibioai-videos:latest .
 ```
 
 ### Push to registry
 
 ```bash
-docker push ghcr.io/man4ish/omnibioai-videos:latest
+docker push ghcr.io/omnibioai/omnibioai-videos:latest
 ```
 
 ### Dockerfile
@@ -235,7 +235,7 @@ Defined in `omnibioai-studio/docker-compose.yml`:
 
 ```yaml
 videos:
-  image: ghcr.io/man4ish/omnibioai-videos:latest
+  image: ghcr.io/omnibioai/omnibioai-videos:latest
   ports:
     - "${HOST_IP:-0.0.0.0}:8086:8086"
   restart: unless-stopped
@@ -274,18 +274,24 @@ docker compose up -d --force-recreate videos
 
 ---
 
-## Planned Content
+## Content (10 videos recorded)
 
-| Video | Tag | Status |
-|-------|-----|--------|
-| Getting Started with OmniBioAI | intro | 🔲 To record |
-| RNA-Seq Analysis End-to-End | tutorial | 🔲 To record |
-| Single-Cell RNA-Seq with Scanpy | demo | 🔲 To record |
-| Variant Calling Pipeline (WGS) | workflow | 🔲 To record |
-| Running Jobs on HPC with Slurm | hpc | 🔲 To record |
-| Cloud Setup — AWS Batch | tutorial | 🔲 To record |
-| Using the Dev Hub RAG Search | demo | 🔲 To record |
-| Registering and Running Workflows | tutorial | 🔲 To record |
+All 10 are recorded, present in `content/`, and live in `videos.json` —
+verified 2026-08-07 (this table previously listed 8 of these as
+"🔲 To record," which was stale):
+
+| # | Video | Tag |
+|---|-------|-----|
+| 1 | Getting Started with OmniBioAI | intro |
+| 2 | RNA-Seq Analysis End-to-End | tutorial |
+| 3 | Single Cell RNA-Seq with Scanpy | demo |
+| 4 | Variant Calling Pipeline | workflow |
+| 5 | Running Jobs on HPC with Slurm | hpc |
+| 6 | Literature AI — Search 36M PubMed Papers | demo |
+| 7 | Lab Integrations — Benchling, REDCap & eLabFTW | demo |
+| 8 | Variant Annotation — gnomAD, ClinVar & COSMIC | demo |
+| 9 | Drug Discovery & Target Identification | demo |
+| 10 | Control Center & Platform Monitoring | demo |
 
 ---
 
@@ -331,4 +337,4 @@ Apache 2.0 — see root `LICENSE` file.
 
 ---
 
-*Part of the [OmniBioAI](https://github.com/man4ish/omnibioai-studio) platform.*
+*Part of the [OmniBioAI](https://github.com/OmniBioAI/omnibioai-studio) platform.*
