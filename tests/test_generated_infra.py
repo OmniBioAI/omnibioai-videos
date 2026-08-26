@@ -5,6 +5,8 @@ import time
 import pytest
 import requests
 
+pytestmark = pytest.mark.docker
+
 # Configuration
 MANIFEST_PATH = 'content/videos.json'
 CONTENT_DIR = 'content'
