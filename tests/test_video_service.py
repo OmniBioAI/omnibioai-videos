@@ -3,6 +3,8 @@ import time
 import pytest
 import requests
 
+pytestmark = pytest.mark.docker
+
 IMAGE_NAME = "omnibioai-videos-test"
 CONTAINER_NAME = "omnibioai-videos-test-container"
 PORT = 8086

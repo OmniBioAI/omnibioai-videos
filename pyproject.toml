@@ -1,5 +1,8 @@
 [tool.pytest.ini_options]
 addopts = "--cov=tests --cov-report=term-missing"
+markers = [
+    "docker: tests that build and exercise the nginx image through Docker",
+]
 
 [tool.coverage.run]
 omit = ["tests/test_video_service.py"]
