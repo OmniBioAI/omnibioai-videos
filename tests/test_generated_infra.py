@@ -2,6 +2,8 @@ import os
 import json
 import subprocess
 import time
+from pathlib import Path
+
 import pytest
 import requests
 
@@ -63,10 +65,18 @@ def docker_service():
     # Build
     subprocess.run(["docker", "build", "-t", IMAGE_NAME, "."], capture_output=True, check=True)
     
-    # Run
+    # Run -- mount content/ at /videos:ro, exactly as omnibioai-studio's
+    # docker-compose does with ${VIDEO_DIR}:/videos:ro in production.
+    # nginx.conf's /videos.json and /videos/ locations always read from
+    # /videos (never from the image's own /usr/share/nginx/html/, which
+    # only backs the "/" SPA route) -- without this mount they 404 against
+    # any freshly-built container, mount or not.
+    content_dir = Path(__file__).resolve().parents[1] / "content"
     subprocess.run([
         "docker", "run", "-d", "--name", CONTAINER_NAME,
-        "-p", f"{PORT}:8086", IMAGE_NAME
+        "-p", f"{PORT}:8086",
+        "-v", f"{content_dir}:/videos:ro",
+        IMAGE_NAME
     ], capture_output=True, check=True)
     
     # Wait
