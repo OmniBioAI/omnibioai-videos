@@ -1,10 +1,16 @@
 [tool.pytest.ini_options]
-addopts = "--cov=tests --cov-report=term-missing"
+addopts = "--cov=tests --cov-report=term-missing --cov-fail-under=95"
 markers = [
     "docker: tests that build and exercise the nginx image through Docker",
 ]
 
 [tool.coverage.run]
+# test_video_service.py is a superseded duplicate of test_generated_infra.py's
+# Part 2 (same build-and-run-the-image approach, but hardcoded to port 8086 --
+# the same port omnibioai-studio's docker-compose binds the real videos
+# service to, so it can never start alongside a running deployment). Kept
+# out of the coverage measurement rather than deleted outright -- that's a
+# repo-hygiene call for whoever owns this repo, not this change.
 omit = ["tests/test_video_service.py"]
 
 [tool.coverage.report]

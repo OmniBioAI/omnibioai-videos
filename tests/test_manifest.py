@@ -17,6 +17,17 @@ def test_manifest_is_valid_json():
         except json.JSONDecodeError as e:
             pytest.fail(f"Manifest is not valid JSON: {e}")
 
+def test_manifest_is_valid_json_reports_decode_errors(tmp_path):
+    global MANIFEST_PATH
+    bad_manifest = tmp_path / "bad.json"
+    bad_manifest.write_text("{not valid json")
+    original, MANIFEST_PATH = MANIFEST_PATH, str(bad_manifest)
+    try:
+        with pytest.raises(pytest.fail.Exception, match="not valid JSON"):
+            test_manifest_is_valid_json()
+    finally:
+        MANIFEST_PATH = original
+
 def test_manifest_schema():
     with open(MANIFEST_PATH, 'r') as f:
         data = json.load(f)
