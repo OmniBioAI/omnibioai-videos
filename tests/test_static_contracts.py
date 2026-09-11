@@ -53,10 +53,10 @@ def test_manifest_entries_are_complete_unique_and_backed_by_files():
 def test_nginx_routes_match_the_packaged_layout_and_documented_endpoints():
     config = NGINX.read_text(encoding="utf-8")
     assert 'root /usr/share/nginx/html;' in config
-    assert "location /videos.json" in config
-    assert 'alias /videos/videos.json;' in config
+    assert "location = /videos.json" in config
+    assert 'alias /usr/share/nginx/html/videos.json;' in config
     assert "location /videos/" in config
-    assert "alias /videos/;" in config
+    assert "alias /usr/share/nginx/html/;" in config
     assert "location /health" in config
 
 

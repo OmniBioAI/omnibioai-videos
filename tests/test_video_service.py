@@ -7,24 +7,30 @@ pytestmark = pytest.mark.docker
 
 IMAGE_NAME = "omnibioai-videos-test"
 CONTAINER_NAME = "omnibioai-videos-test-container"
-PORT = 8086
-BASE_URL = f"http://localhost:{PORT}"
+HOST_PORT = 18086
+CONTAINER_PORT = 8086
+BASE_URL = f"http://localhost:{HOST_PORT}"
 
 @pytest.fixture(scope="module", autouse=True)
 def docker_container():
+    # A failed/interrupted previous run can leave the fixed-name container
+    # behind. Remove only that test-owned container before starting.
+    subprocess.run(["docker", "rm", "-f", CONTAINER_NAME], check=False,
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
     # Build the image
     print("\nBuilding Docker image...")
     subprocess.run(["docker", "build", "-t", IMAGE_NAME, "."], check=True)
-    
+
     # Run the container
     print("Starting Docker container...")
     subprocess.run([
-        "docker", "run", "-d", 
-        "--name", CONTAINER_NAME, 
-        "-p", f"{PORT}:{PORT}", 
+        "docker", "run", "-d",
+        "--name", CONTAINER_NAME,
+        "-p", f"{HOST_PORT}:{CONTAINER_PORT}",
         IMAGE_NAME
     ], check=True)
-    
+
     # Wait for the service to be ready
     max_retries = 10
     for i in range(max_retries):
@@ -48,11 +54,11 @@ def docker_container():
             pytest.fail(f"Service failed to start: {e}")
 
     yield
-    
-    # Cleanup
+
+    # Cleanup, including after a test failure.
     print("\nStopping and removing Docker container...")
-    subprocess.run(["docker", "stop", CONTAINER_NAME], check=True)
-    subprocess.run(["docker", "rm", CONTAINER_NAME], check=True)
+    subprocess.run(["docker", "rm", "-f", CONTAINER_NAME], check=False,
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 def test_root_returns_index():
     response = requests.get(BASE_URL)
