@@ -2,6 +2,8 @@
 
 These tests intentionally exercise the files that are packaged into the nginx
 image without requiring Docker, a network service, or video decoding.
+
+Developer: Manish Kumar <manish@omnibioai.org>
 """
 
 import json
@@ -21,11 +23,14 @@ GUIDE = CONTENT / "guide.html"
 
 
 def load_manifest():
+    """Load and parse the video manifest file."""
     with MANIFEST.open(encoding="utf-8") as handle:
         return json.load(handle)
 
 
 def test_docker_image_packages_the_documented_content_root():
+    """Package the content directory and nginx config into the image and expose port 8086, per the
+    Dockerfile."""
     dockerfile = DOCKERFILE.read_text(encoding="utf-8")
     assert "COPY content/ /usr/share/nginx/html/" in dockerfile
     assert "COPY nginx.conf /etc/nginx/conf.d/default.conf" in dockerfile
@@ -33,6 +38,8 @@ def test_docker_image_packages_the_documented_content_root():
 
 
 def test_manifest_entries_are_complete_unique_and_backed_by_files():
+    """Require every manifest entry to have a unique filename and order, exactly its five documented
+    fields, a matching video file on disk, and non-blank string fields."""
     entries = load_manifest()
     assert isinstance(entries, list) and entries
 
@@ -51,6 +58,8 @@ def test_manifest_entries_are_complete_unique_and_backed_by_files():
 
 
 def test_nginx_routes_match_the_packaged_layout_and_documented_endpoints():
+    """Require nginx.conf's document root, videos.json alias, videos/ alias, and health route to
+    match the packaged layout."""
     config = NGINX.read_text(encoding="utf-8")
     assert 'root /usr/share/nginx/html;' in config
     assert "location = /videos.json" in config
@@ -62,6 +71,8 @@ def test_nginx_routes_match_the_packaged_layout_and_documented_endpoints():
 
 @pytest.mark.xfail(strict=True, reason="Known production routing mismatch: index.js uses /videos/* while Dockerfile packages content at the nginx document root")
 def test_index_uses_the_same_video_urls_as_the_nginx_configuration():
+    """Require index.html's fetch URLs to match the routes nginx actually serves (a known,
+    deliberately xfailed production routing mismatch)."""
     html = INDEX.read_text(encoding="utf-8")
     # This currently fails and records the production routing defect: the
     # image contains /usr/share/nginx/html/*, not /videos/*.
@@ -71,6 +82,8 @@ def test_index_uses_the_same_video_urls_as_the_nginx_configuration():
 
 
 def test_index_contains_manifest_filter_search_and_modal_contracts():
+    """Require index.html to contain the manifest, filter, search, and modal hooks its script relies
+    on."""
     html = INDEX.read_text(encoding="utf-8")
     for marker in ("videos.json", "filterVideos", "setFilter", "openModal", "closeModal", "searchInput", "videoCount"):
         assert marker in html
@@ -79,6 +92,7 @@ def test_index_contains_manifest_filter_search_and_modal_contracts():
 
 
 def test_guide_has_all_documented_sections_and_navigation_handler():
+    """Require guide.html to contain every documented section id and its navigation handler."""
     html = GUIDE.read_text(encoding="utf-8")
     for section in ("overview", "local", "cloud", "hpc", "llm", "workbench", "workflow", "faq"):
         assert f'id="p-{section}"' in html
@@ -88,6 +102,8 @@ def test_guide_has_all_documented_sections_and_navigation_handler():
 
 @pytest.mark.xfail(strict=True, reason="Several manifest-listed video assets are zero-byte placeholders in the repository")
 def test_video_files_are_non_empty_and_have_expected_media_extensions():
+    """Require every manifest-listed video file to be present and non-empty (a known, deliberately
+    xfailed placeholder-file gap)."""
     manifest_names = {entry["filename"] for entry in load_manifest()}
     content_videos = {
         path.name for path in CONTENT.iterdir() if path.suffix.lower() in {".mp4", ".webm", ".mov"}
