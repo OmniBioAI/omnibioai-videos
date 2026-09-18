@@ -1,3 +1,9 @@
+"""Validate the video manifest file: existence, valid JSON, decode-error reporting, schema
+conformance, and unique ordering.
+
+Developer: Manish Kumar <manish@omnibioai.org>
+"""
+
 import json
 import os
 import pytest
@@ -7,9 +13,11 @@ CONTENT_DIR = 'content'
 PERMITTED_TAGS = {'intro', 'tutorial', 'workflow', 'demo', 'hpc'}
 
 def test_manifest_exists():
+    """Require the manifest file to exist at its configured path."""
     assert os.path.exists(MANIFEST_PATH), f"{MANIFEST_PATH} does not exist"
 
 def test_manifest_is_valid_json():
+    """Load the manifest as a JSON list without error."""
     with open(MANIFEST_PATH, 'r') as f:
         try:
             data = json.load(f)
@@ -18,6 +26,7 @@ def test_manifest_is_valid_json():
             pytest.fail(f"Manifest is not valid JSON: {e}")
 
 def test_manifest_is_valid_json_reports_decode_errors(tmp_path):
+    """Report a JSON decode error through pytest.fail when the manifest is malformed."""
     global MANIFEST_PATH
     bad_manifest = tmp_path / "bad.json"
     bad_manifest.write_text("{not valid json")
@@ -29,6 +38,8 @@ def test_manifest_is_valid_json_reports_decode_errors(tmp_path):
         MANIFEST_PATH = original
 
 def test_manifest_schema():
+    """Require every manifest entry to carry its required fields, a permitted tag, an integer order,
+    and a video file that exists on disk."""
     with open(MANIFEST_PATH, 'r') as f:
         data = json.load(f)
     
@@ -50,6 +61,7 @@ def test_manifest_schema():
         assert os.path.exists(video_path), f"Video file {item['filename']} not found in {CONTENT_DIR}"
 
 def test_manifest_ordering():
+    """Require every manifest entry's order value to be unique."""
     with open(MANIFEST_PATH, 'r') as f:
         data = json.load(f)
     

@@ -1,3 +1,10 @@
+"""Superseded duplicate of test_generated_infra.py's Docker infrastructure tests (kept out of
+coverage per pyproject.toml): build and run the packaged nginx image, then exercise its root
+route, manifest headers, video headers, SPA fallback, and health endpoint.
+
+Developer: Manish Kumar <manish@omnibioai.org>
+"""
+
 import subprocess
 import time
 import pytest
@@ -13,6 +20,8 @@ BASE_URL = f"http://localhost:{HOST_PORT}"
 
 @pytest.fixture(scope="module", autouse=True)
 def docker_container():
+    """Build the image and start the container for the module, removing any leftover container from
+    a prior run first and cleaning up afterwards."""
     # A failed/interrupted previous run can leave the fixed-name container
     # behind. Remove only that test-owned container before starting.
     subprocess.run(["docker", "rm", "-f", CONTAINER_NAME], check=False,
@@ -61,18 +70,23 @@ def docker_container():
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 def test_root_returns_index():
+    """Serve the SPA index as HTML with a title from the container's root route."""
     response = requests.get(BASE_URL)
     assert response.status_code == 200
     assert "text/html" in response.headers["Content-Type"]
     assert "<title>" in response.text  # Assuming index.html has a title
 
 def test_manifest_headers():
+    """Serve videos.json with no-cache and a wildcard CORS header, exercised via this module's own
+    container fixture."""
     response = requests.get(f"{BASE_URL}/videos.json")
     assert response.status_code == 200
     assert response.headers["Cache-Control"] == "no-cache"
     assert response.headers["Access-Control-Allow-Origin"] == "*"
 
 def test_video_headers():
+    """Advertise byte-range support, a day-long cache, and a wildcard CORS header on a served video
+    file, when the file is present."""
     # Test with a known video file from manifest or a mock one
     # content/my_video.mov exists according to the file listing
     response = requests.get(f"{BASE_URL}/my_video.mov")
@@ -84,6 +98,8 @@ def test_video_headers():
         pytest.skip("my_video.mov not found in container, skipping header test")
 
 def test_spa_fallback():
+    """Fall back to the SPA index as HTML for an unrecognized path, exercised via this module's own
+    container fixture."""
     # Random paths should return index.html
     response = requests.get(f"{BASE_URL}/some/random/path")
     assert response.status_code == 200
@@ -92,6 +108,7 @@ def test_spa_fallback():
     assert "<title>" in response.text
 
 def test_health_endpoint():
+    """Report status ok from the container's health endpoint."""
     response = requests.get(f"{BASE_URL}/health")
     assert response.status_code == 200
     assert response.json()["status"] == "ok"

@@ -1,3 +1,10 @@
+"""Validate the video manifest against its schema and, when Docker is available, exercise the built
+nginx image end to end: static routes, the manifest headers, video headers, SPA fallback, and the
+health endpoint.
+
+Developer: Manish Kumar <manish@omnibioai.org>
+"""
+
 import os
 import json
 import subprocess
@@ -103,30 +110,36 @@ def docker_service():
     subprocess.run(["docker", "rm", CONTAINER_NAME], capture_output=True)
 
 def test_nginx_root_serving(docker_service):
+    """Serve the SPA index as HTML from the container's root route."""
     r = requests.get(BASE_URL)
     assert r.status_code == 200
     assert "text/html" in r.headers["Content-Type"]
 
 def test_nginx_guide_serving(docker_service):
+    """Serve guide.html from the running container."""
     r = requests.get(f"{BASE_URL}/guide.html")
     assert r.status_code == 200
 
 def test_manifest_headers_and_cors(docker_service):
+    """Serve videos.json with no-cache and a wildcard CORS header."""
     r = requests.get(f"{BASE_URL}/videos.json")
     assert r.headers["Cache-Control"] == "no-cache"
     assert r.headers["Access-Control-Allow-Origin"] == "*"
 
 def test_video_infrastructure_headers(docker_service):
+    """Advertise byte-range support on a served video file, when the file is present."""
     r = requests.get(f"{BASE_URL}/my_video.mov")
     if r.status_code == 200:
         # Some Nginx configurations or proxies might double-up the Accept-Ranges header
         assert "bytes" in r.headers["Accept-Ranges"]
 
 def test_spa_fallback_routing(docker_service):
+    """Fall back to the SPA index as HTML for an unrecognized path."""
     r = requests.get(BASE_URL + "/any/random/path")
     assert r.status_code == 200
     assert "text/html" in r.headers["Content-Type"]
 
 def test_health_check_payload(docker_service):
+    """Report {"status": "ok"} from the container's health endpoint."""
     r = requests.get(f"{BASE_URL}/health")
     assert r.json() == {"status": "ok"}
