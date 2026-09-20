@@ -13,6 +13,7 @@
 
   var TAGS = ['intro', 'tutorial', 'workflow', 'demo', 'hpc'];
   var FILENAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.(mp4|webm)$/;
+  var THUMBNAIL_RE = /^(?:\/[A-Za-z0-9][A-Za-z0-9._\/-]{0,180}|[A-Za-z0-9][A-Za-z0-9._\/-]{0,180})\.(jpg|jpeg|png|webp)$/;
 
   var allVideos = [];
   var currentFilter = 'all';
@@ -37,6 +38,23 @@
     root.replaceChildren(node);
   }
 
+  function labelTag(tag) {
+    return tag === 'hpc' ? 'HPC' : tag.charAt(0).toUpperCase() + tag.slice(1);
+  }
+
+  function formatDuration(value) {
+    if (typeof value === 'number' && isFinite(value) && value > 0) {
+      var total = Math.round(value);
+      var hours = Math.floor(total / 3600);
+      var minutes = Math.floor((total % 3600) / 60);
+      var seconds = total % 60;
+      if (hours) return hours + ':' + String(minutes).padStart(2, '0') + ':' + String(seconds).padStart(2, '0');
+      return minutes + ':' + String(seconds).padStart(2, '0');
+    }
+    if (typeof value === 'string' && value.trim()) return value.trim();
+    return '';
+  }
+
   function normalise(raw) {
     if (!Array.isArray(raw)) return [];
     var out = [];
@@ -49,6 +67,8 @@
         desc: typeof v.desc === 'string' ? v.desc : '',
         tag: TAGS.indexOf(v.tag) >= 0 ? v.tag : 'tutorial',
         order: typeof v.order === 'number' ? v.order : 999,
+        thumbnail: typeof v.thumbnail === 'string' && THUMBNAIL_RE.test(v.thumbnail) ? v.thumbnail : '',
+        duration: formatDuration(v.duration),
         url: '/videos/' + encodeURIComponent(v.filename)
       });
     });
@@ -57,31 +77,45 @@
   }
 
   function card(v) {
-    var c = el('div', 'video-card');
+    var c = el('article', 'video-card');
     c.tabIndex = 0;
     c.setAttribute('role', 'button');
+    c.setAttribute('aria-label', 'Play ' + v.title);
 
     var thumb = el('div', 'thumb');
-    var vid = document.createElement('video');
-    vid.src = v.url + '#t=2';
-    vid.preload = 'metadata';
-    vid.muted = true;
-    thumb.appendChild(vid);
+    var fallback = el('div', 'thumb-fallback');
+    fallback.appendChild(el('span', 'fallback-mark', 'OB'));
+    thumb.appendChild(fallback);
+    if (v.thumbnail) {
+      var img = document.createElement('img');
+      img.src = v.thumbnail.charAt(0) === '/' ? v.thumbnail : '/' + v.thumbnail;
+      img.alt = '';
+      img.loading = 'lazy';
+      img.addEventListener('error', function () { img.remove(); thumb.classList.add('missing-thumb'); });
+      thumb.appendChild(img);
+    } else {
+      thumb.classList.add('missing-thumb');
+      var vid = document.createElement('video');
+      vid.src = v.url + '#t=2';
+      vid.preload = 'metadata';
+      vid.muted = true;
+      thumb.appendChild(vid);
+    }
 
     var overlay = el('div', 'thumb-overlay');
     var circle = el('div', 'play-circle', '▶');
     overlay.appendChild(circle);
     thumb.appendChild(overlay);
-    thumb.appendChild(el('span', 'thumb-tag tag-' + v.tag, v.tag));
-    if (v.order !== 999) thumb.appendChild(el('span', 'thumb-order', '#' + v.order));
+    thumb.appendChild(el('span', 'thumb-tag tag-' + v.tag, labelTag(v.tag)));
+    if (v.duration) thumb.appendChild(el('span', 'thumb-duration', v.duration));
     c.appendChild(thumb);
 
     var body = el('div', 'card-body');
     body.appendChild(el('div', 'card-title', v.title));
-    body.appendChild(el('div', 'card-desc', v.desc));
+    if (v.desc) body.appendChild(el('div', 'card-desc', v.desc));
     var footer = el('div', 'card-footer');
-    footer.appendChild(el('span', null, 'OmniBioAI Platform'));
-    footer.appendChild(el('span', null, '▶ Play'));
+    footer.appendChild(el('span', null, labelTag(v.tag)));
+    footer.appendChild(el('span', null, v.duration || 'Play'));
     body.appendChild(footer);
     c.appendChild(body);
 
@@ -126,7 +160,7 @@
   function openModal(v) {
     document.getElementById('modalVideo').src = v.url;
     document.getElementById('modalTitle').textContent = v.title;
-    document.getElementById('modalMeta').textContent = v.tag + ' · OmniBioAI Platform';
+    document.getElementById('modalMeta').textContent = labelTag(v.tag) + (v.duration ? ' · ' + v.duration : '') + ' · OmniBioAI Platform';
     document.getElementById('modal').classList.add('open');
     document.body.classList.add('modal-open');
   }

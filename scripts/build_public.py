@@ -54,10 +54,14 @@ REVIEW_REQUIRED = "REVIEW_REQUIRED"
 VISIBILITIES = (PUBLIC, INTERNAL, REVIEW_REQUIRED)
 UNCLASSIFIED = "UNCLASSIFIED"  # missing / unknown visibility -> treated as non-public
 
-# Only these manifest fields ever reach the public catalog.
-PUBLIC_FIELDS = ("filename", "title", "desc", "tag", "order")
+# Only these manifest fields ever reach the public catalog. Optional fields are
+# copied only when present and well-formed.
+REQUIRED_PUBLIC_FIELDS = ("filename", "title", "desc", "tag", "order")
+OPTIONAL_PUBLIC_FIELDS = ("thumbnail", "duration")
+PUBLIC_FIELDS = (*REQUIRED_PUBLIC_FIELDS, *OPTIONAL_PUBLIC_FIELDS)
 ALLOWED_TAGS = ("intro", "tutorial", "workflow", "demo", "hpc")
 FILENAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.(mp4|webm)$")
+THUMBNAIL_RE = re.compile(r"^(?:/[A-Za-z0-9][A-Za-z0-9._/-]{0,180}|[A-Za-z0-9][A-Za-z0-9._/-]{0,180})\.(?:jpg|jpeg|png|webp)$")
 SHA256_RE = re.compile(r"[0-9a-f]{64}")
 MEDIA_SUFFIXES = (".mp4", ".webm", ".mov")
 CONTENT_MOUNT = "/content"  # where the host content directory is mounted (read-only) in the container
@@ -226,8 +230,16 @@ def _validate_public_entry(entry: dict, media_dir: Path) -> dict:
             "re-review it and update 'approved_sha256'"
         )
 
-    projected = {field: entry[field] for field in PUBLIC_FIELDS}
-    findings = scan_text(f"{projected['title']}\n{projected['desc']}")
+    projected = {field: entry[field] for field in REQUIRED_PUBLIC_FIELDS}
+    thumbnail = entry.get("thumbnail")
+    if isinstance(thumbnail, str) and THUMBNAIL_RE.fullmatch(thumbnail):
+        projected["thumbnail"] = thumbnail
+    duration = entry.get("duration")
+    if (isinstance(duration, str) and duration.strip()) or (
+        isinstance(duration, (int, float)) and not isinstance(duration, bool) and duration > 0
+    ):
+        projected["duration"] = duration
+    findings = scan_text(f"{projected['title']}\n{projected['desc']}\n{projected.get('thumbnail', '')}\n{projected.get('duration', '')}")
     if findings:
         raise PublishError(f"{name}: title/description contain forbidden content: {findings}")
     return {"public": projected, "sha256": approved_sha, "size": approved_size}

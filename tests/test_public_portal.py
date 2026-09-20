@@ -221,7 +221,8 @@ def test_public_catalog_record_is_an_allowlisted_projection(content_dir, portal_
     out = tmp_path / "out"
     bp.build(content_dir, portal_dir, out)
     record = json.loads((out / "publication" / "entries" / "001.json").read_text())
-    assert set(record) == set(bp.PUBLIC_FIELDS)  # no visibility, approved_*, internal_path or notes
+    assert set(record) <= set(bp.PUBLIC_FIELDS)  # no visibility, approved_*, internal_path or notes
+    assert set(bp.REQUIRED_PUBLIC_FIELDS) <= set(record)
 
 
 def test_media_can_live_in_a_different_host_directory_than_the_manifest(content_dir, portal_dir, tmp_path):
@@ -948,7 +949,8 @@ def test_catalog_lists_exactly_the_public_record(site):
     assert headers["cache-control"] == "no-cache"
     catalog = json.loads(body)
     assert [e["filename"] for e in catalog] == ["pub.mp4"]
-    assert set(catalog[0]) == set(bp.PUBLIC_FIELDS)
+    assert set(catalog[0]) <= set(bp.PUBLIC_FIELDS)
+    assert set(bp.REQUIRED_PUBLIC_FIELDS) <= set(catalog[0])
 
 
 @pytest.mark.docker
@@ -1284,3 +1286,219 @@ def test_browser_lists_only_the_public_video_and_keeps_filters(content_dir, tmp_
     for name in [*NON_PUBLIC, UNREGISTERED]:
         assert f"{name}-TITLE-SENTINEL" not in page["body"]
     assert page["errors"] == []
+
+
+GRID_FIXTURE_TITLES = [
+    "01 Getting Started with OmniBioAI",
+    "02 Single-Cell Analysis Walkthrough",
+    "03 RNA-seq Workflow Demo",
+    "04 Variant Analysis Tutorial",
+    "05 Nextflow Workflow Execution",
+    "06 WDL Workflow Demo",
+    "07 Snakemake Pipeline Tutorial",
+    "08 HPC Job Execution",
+    "09 RAG Knowledge Search",
+    "10 PubMed Literature Search",
+    "11 Tool Catalog Walkthrough",
+    "12 Workflow Builder Demo",
+    "13 Multi-Omics Analysis",
+    "14 Proteomics Workflow",
+    "15 Knowledge Graph Demo",
+    "16 AI Agent Walkthrough",
+    "17 Model Registry Tutorial",
+    "18 Security Dashboard Demo",
+    "19 Reproducibility & Provenance",
+    "20 Platform Overview",
+]
+GRID_TAGS = ["intro", "tutorial", "workflow", "demo", "hpc"]
+
+
+def _grid_records(count, *, long_text=False, missing_thumbnail=False):
+    records = []
+    for i, title in enumerate(GRID_FIXTURE_TITLES[:count], 1):
+        tag = GRID_TAGS[(i - 1) % len(GRID_TAGS)]
+        desc = f"Synthetic {tag} fixture used only to validate the responsive public portal grid."
+        if long_text:
+            title = title + " with an intentionally long title that should wrap neatly without widening the card"
+            desc = desc + " This deliberately long description checks clamping, alignment and overflow behavior across card rows."
+        record = {
+            "filename": "intro_getting_started.mp4",  # one approved media source reused; no large copies
+            "title": title,
+            "desc": desc,
+            "tag": tag,
+            "order": i,
+            "duration": 60 + i,
+        }
+        if not missing_thumbnail:
+            record["thumbnail"] = f"thumbs/synthetic-{i:02d}.webp"  # intentionally absent; UI must fall back safely
+        records.append(record)
+    return records
+
+
+def _static_portal_dir(tmp_path, records):
+    root = tmp_path / f"static-portal-{uuid.uuid4().hex}"
+    root.mkdir()
+    for name in ("index.html", "portal.css", "portal.js"):
+        shutil.copyfile(ROOT / "portal" / name, root / name)
+    (root / "videos.json").write_text(json.dumps(records), encoding="utf-8")
+    return root
+
+
+def _with_page(base_url, viewport, callback, screenshot=None):
+    sync_api = pytest.importorskip("playwright.sync_api")
+    try:
+        with sync_api.sync_playwright() as pw:
+            browser = pw.chromium.launch()
+            page = browser.new_page(viewport=viewport)
+            errors = []
+            page.on("pageerror", lambda exc: errors.append(str(exc)))
+            page.goto(base_url + "/")
+            page.wait_for_selector(".state-box, .video-card", timeout=8000)
+            result = callback(page)
+            result["errors"] = errors
+            if screenshot is not None:
+                page.screenshot(path=str(screenshot), full_page=True)
+            browser.close()
+            return result
+    except sync_api.Error as exc:
+        pytest.skip(f"Chromium unavailable: {str(exc)[:80]}")
+
+
+def _grid_metrics(page):
+    return page.evaluate("""() => {
+      const cards = [...document.querySelectorAll('.video-card')];
+      const grid = document.querySelector('.video-grid');
+      const rows = new Map();
+      for (const card of cards) {
+        const r = card.getBoundingClientRect();
+        const key = Math.round(r.top);
+        rows.set(key, (rows.get(key) || 0) + 1);
+      }
+      const rects = cards.map(card => {
+        const r = card.getBoundingClientRect();
+        const thumb = card.querySelector('.thumb').getBoundingClientRect();
+        return {width: r.width, height: r.height, top: r.top, left: r.left, thumbRatio: thumb.width / thumb.height};
+      });
+      return {
+        cardCount: cards.length,
+        rowCounts: [...rows.values()],
+        widths: rects.map(r => r.width),
+        thumbRatios: rects.map(r => r.thumbRatio),
+        bodyWidth: document.documentElement.scrollWidth,
+        viewportWidth: window.innerWidth,
+        gridWidth: grid ? grid.getBoundingClientRect().width : 0,
+        text: document.body.innerText,
+      };
+    }""")
+
+
+def _assert_grid_shape(metrics, expected_count, max_first_row):
+    assert metrics["cardCount"] == expected_count
+    if expected_count:
+        assert max(metrics["rowCounts"]) <= max_first_row
+        assert min(metrics["widths"]) >= 240
+        assert max(metrics["widths"]) - min(metrics["widths"]) < 3
+        assert all(abs(r - (16 / 9)) < 0.08 for r in metrics["thumbRatios"])
+        assert metrics["bodyWidth"] <= metrics["viewportWidth"] + 1
+
+
+@pytest.mark.parametrize("count", [0, 1, 2, 3, 4, 10, 20])
+def test_browser_grid_card_counts_and_no_desktop_stretch(tmp_path, serve_bundle, count):
+    records = _grid_records(count, long_text=count in (4, 20), missing_thumbnail=count == 1)
+    base = serve_bundle(_static_portal_dir(tmp_path, records))
+
+    def inspect(page):
+        metrics = _grid_metrics(page)
+        metrics["videoCount"] = page.locator("#videoCount").inner_text() if page.locator("#videoCount").is_visible() else ""
+        metrics["controlsVisible"] = page.locator("#controls").is_visible()
+        metrics["missingThumbs"] = page.locator(".thumb.missing-thumb").count()
+        return metrics
+
+    result = _with_page(base, {"width": 1280, "height": 900}, inspect)
+    if count == 0:
+        assert result["controlsVisible"] is False
+        assert "Videos coming soon" in result["text"]
+        assert result["cardCount"] == 0
+    else:
+        _assert_grid_shape(result, count, 4)
+        assert result["videoCount"] == f"{count} video" + ("s" if count != 1 else "")
+        assert "01 Getting Started with OmniBioAI" in result["text"]
+        if count == 1:
+            assert result["widths"][0] <= 282  # a single card keeps normal card width, not full-page width
+            assert result["missingThumbs"] == 1
+    assert result["errors"] == []
+
+
+@pytest.mark.parametrize(
+    ("viewport", "max_first_row"),
+    [({"width": 1360, "height": 900}, 4), ({"width": 1024, "height": 820}, 3), ({"width": 760, "height": 900}, 2), ({"width": 390, "height": 844}, 1)],
+)
+def test_browser_grid_responsive_rows_with_twenty_videos(tmp_path, serve_bundle, viewport, max_first_row):
+    base = serve_bundle(_static_portal_dir(tmp_path, _grid_records(20, long_text=True)))
+    result = _with_page(base, viewport, _grid_metrics, screenshot=tmp_path / f"grid-{viewport['width']}.png")
+    _assert_grid_shape(result, 20, max_first_row)
+    assert result["rowCounts"][0] == max_first_row
+    assert "20 Platform Overview" in result["text"]
+    assert result["errors"] == []
+
+
+def test_browser_grid_filters_search_counts_and_keyboard_open(tmp_path, serve_bundle):
+    base = serve_bundle(_static_portal_dir(tmp_path, _grid_records(20)))
+
+    def inspect(page):
+        page.locator('.filter-btn[data-tag="workflow"]').click()
+        page.locator("#searchInput").fill("RNA-seq")
+        combined_count = page.locator(".video-card").count()
+        combined_text = page.locator("body").inner_text()
+        video_count = page.locator("#videoCount").inner_text()
+        page.locator("#searchInput").fill("")
+        workflow_count = page.locator(".video-card").count()
+        page.locator('.filter-btn[data-tag="all"]').click()
+        all_count = page.locator(".video-card").count()
+        page.locator("#searchInput").fill("Security")
+        search_count = page.locator(".video-card").count()
+        page.locator("#searchInput").fill("")
+        first = page.locator(".video-card").first
+        first.focus()
+        page.keyboard.press("Enter")
+        modal_open = page.locator("#modal.open").is_visible()
+        modal_src = page.locator("#modalVideo").evaluate("node => node.getAttribute('src')")
+        return {
+            "combinedCount": combined_count,
+            "combinedText": combined_text,
+            "videoCount": video_count,
+            "workflowCount": workflow_count,
+            "allCount": all_count,
+            "searchCount": search_count,
+            "modalOpen": modal_open,
+            "modalSrc": modal_src,
+            "bodyWidth": page.evaluate("document.documentElement.scrollWidth"),
+            "viewportWidth": page.evaluate("window.innerWidth"),
+        }
+
+    result = _with_page(base, {"width": 1280, "height": 900}, inspect)
+    assert result["allCount"] == 20
+    assert result["workflowCount"] == 4
+    assert result["combinedCount"] == 1 and "03 RNA-seq Workflow Demo" in result["combinedText"]
+    assert result["videoCount"] == "1 video"
+    assert result["searchCount"] == 1
+    assert result["modalOpen"] is True
+    assert result["modalSrc"] == "/videos/intro_getting_started.mp4"
+    assert result["bodyWidth"] <= result["viewportWidth"] + 1
+    assert result["errors"] == []
+
+
+def test_production_build_does_not_include_grid_stress_fixture_titles(tmp_path):
+    out = tmp_path / "production-out"
+    manifest = json.loads((ROOT / "content" / "videos.json").read_text())
+    public = [e for e in manifest if e.get("visibility") == "PUBLIC"]
+    for entry in public:
+        media = ROOT / "content" / entry["filename"]
+        if not media.is_file() or media.stat().st_size != entry["approved_size_bytes"] \
+                or bp.sha256_file(media) != entry["approved_sha256"]:
+            pytest.skip("the approved media bytes are not present on this machine")
+    report = bp.build(ROOT / "content", ROOT / "portal", out)
+    assert report["published"] == ["intro_getting_started.mp4"]
+    bundle = "\n".join(p.read_text(encoding="utf-8", errors="replace") for p in out.rglob("*") if p.is_file())
+    for title in GRID_FIXTURE_TITLES:
+        assert title not in bundle
