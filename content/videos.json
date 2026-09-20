@@ -80,5 +80,15 @@
     "tag": "demo",
     "order": 10,
     "visibility": "REVIEW_REQUIRED"
+  },
+  {
+    "filename": "omnibioai_documentation_portal.mp4",
+    "title": "OmniBioAI Documentation Portal",
+    "desc": "Walkthrough of the OmniBioAI Documentation Portal, including platform documentation, navigation, services, workflows and developer resources.",
+    "tag": "documentation",
+    "order": 11,
+    "visibility": "PUBLIC",
+    "approved_sha256": "57acee7fc9b9c32c0686fbaa03569e2ce901d133695011f8230f4d13fbbd567a",
+    "approved_size_bytes": 1001108273
   }
 ]

@@ -233,6 +233,7 @@ body {
 .tag-workflow { background: rgba(255,107,53,0.15); color: var(--accent3); border: 1px solid rgba(255,107,53,0.25); }
 .tag-demo     { background: rgba(168,139,250,0.15); color: #a78bfa;      border: 1px solid rgba(168,139,250,0.25); }
 .tag-hpc      { background: rgba(255,165,2,0.15); color: var(--warn);    border: 1px solid rgba(255,165,2,0.25); }
+.tag-documentation { background: rgba(20,184,166,0.15); color: #5eead4;  border: 1px solid rgba(20,184,166,0.25); }
 
 .card-body { padding: 12px 14px 14px; flex: 1; display: flex; flex-direction: column; min-height: 128px; }
 

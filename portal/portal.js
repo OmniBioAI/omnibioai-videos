@@ -11,7 +11,7 @@
 (function () {
   'use strict';
 
-  var TAGS = ['intro', 'tutorial', 'workflow', 'demo', 'hpc'];
+  var TAGS = ['intro', 'tutorial', 'workflow', 'demo', 'hpc', 'documentation'];
   var FILENAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.(mp4|webm)$/;
   var THUMBNAIL_RE = /^(?:\/[A-Za-z0-9][A-Za-z0-9._\/-]{0,180}|[A-Za-z0-9][A-Za-z0-9._\/-]{0,180})\.(jpg|jpeg|png|webp)$/;
 

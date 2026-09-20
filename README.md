@@ -87,6 +87,7 @@ All videos are configured via `videos.json`. Edit this file to add, rename, reor
 | `workflow` | Orange | End-to-end bioinformatics pipelines |
 | `demo` | Purple | Live demonstrations in research contexts |
 | `hpc` | Amber | HPC cluster setup and Slurm job submission |
+| `documentation` | Teal | Documentation portal and developer resource walkthroughs |
 
 ---
 
@@ -263,7 +264,7 @@ docker compose up -d --force-recreate videos
 | Feature | Description |
 |---------|-------------|
 | Manifest-driven | Reads `videos.json` for titles, descriptions, order. Falls back to nginx autoindex if no manifest found. |
-| Tag filtering | Filter bar: All / Intro / Tutorial / Workflow / Demo / HPC |
+| Tag filtering | Filter bar: All / Intro / Tutorial / Workflow / Demo / HPC / Documentation |
 | Full-text search | Searches across video titles and descriptions in real time |
 | Modal player | Click any card to open a full-width video modal with autoplay |
 | Keyboard shortcut | `Esc` closes the modal |

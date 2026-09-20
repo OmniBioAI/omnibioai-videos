@@ -511,8 +511,25 @@ def test_repo_manifest_every_entry_has_an_explicit_valid_visibility():
 def test_repo_public_entries_carry_a_valid_content_approval():
     manifest = json.loads((ROOT / "content" / "videos.json").read_text())
     public = [e for e in manifest if e.get("visibility") == "PUBLIC"]
-    assert [e["filename"] for e in public] == ["intro_getting_started.mp4"]  # the one approved video
+    expected_public = {
+        "intro_getting_started.mp4": {
+            "approved_sha256": "22a84d99968a07acd89e53ca4f893ab23b4e625619f2973a8646f6e9ba06c180",
+            "approved_size_bytes": 879583564,
+            "tag": "intro",
+        },
+        "omnibioai_documentation_portal.mp4": {
+            "approved_sha256": "57acee7fc9b9c32c0686fbaa03569e2ce901d133695011f8230f4d13fbbd567a",
+            "approved_size_bytes": 1001108273,
+            "tag": "documentation",
+        },
+    }
+    assert {e["filename"] for e in public} == set(expected_public)
     for entry in public:
+        assert {
+            "approved_sha256": entry["approved_sha256"],
+            "approved_size_bytes": entry["approved_size_bytes"],
+            "tag": entry["tag"],
+        } == expected_public[entry["filename"]]
         assert bp.SHA256_RE.fullmatch(entry["approved_sha256"])
         assert isinstance(entry["approved_size_bytes"], int) and entry["approved_size_bytes"] > 0
     unapproved = [e["filename"] for e in manifest if e.get("visibility") != "PUBLIC"]
@@ -553,6 +570,9 @@ def test_portal_is_read_only_and_credential_free():
     assert "credentials: 'omit'" in js
     for source in (html, js, css):
         assert "http://" not in source and "https://" not in source
+    assert "documentation" in js
+    assert 'data-tag="documentation"' in html and ">Documentation<" in html
+    assert ".tag-documentation" in css
     # nothing that a strict CSP (no unsafe-inline) would block or that hides behaviour in markup
     assert "onclick=" not in html and " style=" not in html
     assert html.count("<script") == 1 and 'src="/portal.js"' in html
@@ -1498,7 +1518,7 @@ def test_production_build_does_not_include_grid_stress_fixture_titles(tmp_path):
                 or bp.sha256_file(media) != entry["approved_sha256"]:
             pytest.skip("the approved media bytes are not present on this machine")
     report = bp.build(ROOT / "content", ROOT / "portal", out)
-    assert report["published"] == ["intro_getting_started.mp4"]
+    assert report["published"] == [e["filename"] for e in public]
     bundle = "\n".join(p.read_text(encoding="utf-8", errors="replace") for p in out.rglob("*") if p.is_file())
     for title in GRID_FIXTURE_TITLES:
         assert title not in bundle

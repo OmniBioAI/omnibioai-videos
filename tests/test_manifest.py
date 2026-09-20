@@ -10,7 +10,7 @@ import pytest
 
 MANIFEST_PATH = 'content/videos.json'
 CONTENT_DIR = 'content'
-PERMITTED_TAGS = {'intro', 'tutorial', 'workflow', 'demo', 'hpc'}
+PERMITTED_TAGS = {'intro', 'tutorial', 'workflow', 'demo', 'hpc', 'documentation'}
 
 def test_manifest_exists():
     """Require the manifest file to exist at its configured path."""

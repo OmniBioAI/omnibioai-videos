@@ -19,7 +19,7 @@ pytestmark = pytest.mark.docker
 # Configuration
 MANIFEST_PATH = 'content/videos.json'
 CONTENT_DIR = 'content'
-PERMITTED_TAGS = {'intro', 'tutorial', 'workflow', 'demo', 'hpc'}
+PERMITTED_TAGS = {'intro', 'tutorial', 'workflow', 'demo', 'hpc', 'documentation'}
 IMAGE_NAME = "omnibioai-videos-test"
 CONTAINER_NAME = "omnibioai-videos-test-container-refactored"
 PORT = 8091  # Changed to avoid conflicts
