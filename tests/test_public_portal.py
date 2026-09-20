@@ -658,6 +658,12 @@ def test_tunnel_baseline_hostnames_and_compare():
     assert "present in only one" in tb.compare(base, changed, {"videos.example"})[0]
 
 
+def test_tunnel_baseline_drops_per_request_tokens_from_redirect_targets():
+    access = "https://team.cloudflareaccess.com/cdn-cgi/access/login/neo4j.example.org?kid=abc&meta=eyJ0eXAi.payload.sig&redirect_url=%2F"
+    assert tb.normalise_location(access) == "https://team.cloudflareaccess.com/cdn-cgi/access/login/neo4j.example.org"
+    assert tb.normalise_location("") == "" and tb.normalise_location("/login?next=/") == "/login"
+
+
 def test_tunnel_baseline_probe_records_errors_as_state():
     assert tb.probe("nonexistent.invalid", "/")["status"].startswith("error:")
 

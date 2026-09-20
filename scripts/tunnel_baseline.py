@@ -22,6 +22,7 @@ import json
 import re
 import sys
 import time
+import urllib.parse
 from pathlib import Path
 
 PATHS = ("/", "/health")
@@ -31,6 +32,12 @@ def hostnames(config_text: str) -> list[str]:
     return re.findall(r"^\s*-\s*hostname:\s*(\S+)\s*$", config_text, flags=re.MULTILINE)
 
 
+def normalise_location(location: str) -> str:
+    """Keep scheme/host/path only: Cloudflare Access login redirects embed a per-request token in the query."""
+    parts = urllib.parse.urlsplit(location)
+    return urllib.parse.urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
+
+
 def probe(host: str, path: str) -> dict:
     conn = http.client.HTTPSConnection(host, timeout=20)
     try:
@@ -38,7 +45,7 @@ def probe(host: str, path: str) -> dict:
         resp = conn.getresponse()
         resp.read(1024)
         ctype = (resp.getheader("content-type") or "").split(";")[0]
-        return {"status": resp.status, "content_type": ctype, "location": resp.getheader("location") or ""}
+        return {"status": resp.status, "content_type": ctype, "location": normalise_location(resp.getheader("location") or "")}
     except OSError as exc:  # DNS failure, refused, timeout: recorded as a state, not an exception
         return {"status": f"error:{type(exc).__name__}", "content_type": "", "location": ""}
     finally:
