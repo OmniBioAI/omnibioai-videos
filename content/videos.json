@@ -5,7 +5,9 @@
     "desc": "Complete walkthrough of the platform — setup, configuration and first run.",
     "tag": "intro",
     "order": 1,
-    "visibility": "REVIEW_REQUIRED"
+    "visibility": "PUBLIC",
+    "approved_sha256": "22a84d99968a07acd89e53ca4f893ab23b4e625619f2973a8646f6e9ba06c180",
+    "approved_size_bytes": 879583564
   },
   {
     "filename": "tutorial_rnaseq_workflow.mp4",

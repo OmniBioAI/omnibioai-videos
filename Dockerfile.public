@@ -1,7 +1,10 @@
-# Public video portal image. Build the bundle first so only PUBLIC content is
-# ever in the build context:
+# Public video portal image: nginx + the static portal + the generated publication
+# metadata (approved hashes, catalog fragments, exact-match nginx locations) + the
+# runtime verifier. It contains NO video and NO content directory: approved media
+# is mounted read-only from the host at run time and served only if it still matches
+# its approved SHA-256 (see runtime/publish-runtime.sh and deploy/docker-compose.public.yml).
 #
-#   python scripts/build_public.py --out dist/public
+#   python scripts/build_public.py --media-dir <host content dir> --out dist/public
 #   docker build -f Dockerfile.public -t omnibioai-videos-public:local .
 #
 # If dist/public does not exist the COPY fails, i.e. it fails closed: this image
@@ -10,6 +13,11 @@ FROM nginx:alpine
 
 RUN rm -rf /usr/share/nginx/html/* /etc/nginx/conf.d/default.conf
 COPY nginx.public.conf /etc/nginx/conf.d/default.conf
-COPY dist/public/ /usr/share/nginx/html/
+COPY dist/public/www/ /usr/share/nginx/html/
+COPY dist/public/publication/ /etc/publication/
+COPY runtime/publish-runtime.sh /usr/local/bin/publish-runtime.sh
 
 EXPOSE 8087
+# The nginx base image sets STOPSIGNAL SIGQUIT; the publisher (PID 1) handles TERM/INT/QUIT and shuts nginx down gracefully.
+STOPSIGNAL SIGTERM
+ENTRYPOINT ["/usr/local/bin/publish-runtime.sh"]

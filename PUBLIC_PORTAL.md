@@ -1,94 +1,121 @@
 # Public video portal (videos.omnibioai.org)
 
-A separate, read-only nginx image that serves **only** content explicitly classified `PUBLIC`.
-It is independent of the internal `videos` service (port 8086, used by Studio/Workbench), which is
-unchanged.
+A separate, read-only nginx service that publishes **only** videos explicitly approved in
+`content/videos.json`. It is independent of the internal `videos` service (port 8086, used by
+Studio/Workbench), which is unchanged.
 
 ```
-browser -> Cloudflare -> cloudflared -> 127.0.0.1:8087 -> omnibioai-videos-public (nginx, static)
-                                                          |- index.html / portal.css / portal.js
-                                                          |- videos.json   (generated, PUBLIC entries only)
-                                                          `- videos/<PUBLIC files only>
+browser -> Cloudflare -> cloudflared -> 127.0.0.1:8087 -> omnibioai-videos-public (hardened nginx)
+                                                           |- portal HTML/CSS/JS          (in the image)
+                                                           |- approved hashes + allowlist (in the image)
+                                                           `- /content  <- host content dir, READ-ONLY mount
 ```
 
-No backend, no API calls, no cookies, no credentials, no volumes. The container never sees
-`content/`; it only contains what `scripts/build_public.py` emitted.
+**The video files stay on the host** (`~/Desktop/machine/omnibioai-videos/content`). The image contains
+nginx, the portal, and generated publication metadata -- no video, no `content/`, no `guide.html`.
 
-## Classification
+## Publication control plane: `content/videos.json`
 
-Every entry in `content/videos.json` carries `visibility`, exactly one of:
+Every entry has `visibility`, exactly one of `PUBLIC`, `INTERNAL`, `REVIEW_REQUIRED`.
 
-| Value | Meaning |
-|-------|---------|
-| `PUBLIC` | Reviewed and approved for anonymous viewing. The only value that is ever published. |
-| `INTERNAL` | For OmniBioAI users/staff only. Never published. |
-| `REVIEW_REQUIRED` | Not yet cleared. Never published. |
+| Value | Catalog | `/videos/<file>` |
+|-------|---------|------------------|
+| `PUBLIC` + approved hash matches | listed | streamable (GET/HEAD/Range/206) |
+| `PUBLIC` but file changed / missing / symlink / bad container | not listed | 404 |
+| `REVIEW_REQUIRED`, `INTERNAL` | not listed | 404 |
+| missing / misspelled / `public` / `null` / any other value | not listed | 404 |
+| file in the content dir but not in the manifest (`my_video.mov`, `guide.html`, ...) | not listed | 404 |
 
-**Fail closed:** missing, misspelled, wrongly-cased (`public`), padded (`"PUBLIC "`), non-string or
-`null` visibility is treated as not public. Media files that are not in the manifest at all are not
-public either. A malformed `PUBLIC` entry (bad filename, missing/empty/symlinked file, unknown tag,
-secret- or path-like text) **aborts** the build rather than being skipped.
+The visibility decision controls **both** catalog discovery and direct media access: hiding an item
+while leaving its URL reachable is not possible in this design, because the only way a URL exists is
+the generated exact-match `location = /videos/<file>` for an approved, hash-verified file.
 
-Only `filename`, `title`, `desc`, `tag`, `order` reach the public catalog; any other manifest field
-is dropped. `guide.html` and the internal `index.html` are never copied.
+A `PUBLIC` entry must carry `approved_sha256` and `approved_size_bytes` of the exact bytes that were
+approved. Approval is bound to content, not to a filename.
 
-### To publish a video
+### How a file becomes public
 
-1. Review the whole video at full resolution (on-screen paths, hostnames/IPs, keys, patient/user data,
-   audio) and its container metadata (`ffprobe -show_format`).
-2. Set its `visibility` to `PUBLIC` **and** add `"sha256": "<sha256sum of the reviewed file>"` in
-   `content/videos.json`, in a reviewed PR. Approval is pinned to those exact bytes: if the file is
-   replaced afterwards the build aborts until it is re-reviewed and the hash updated.
-3. Rebuild and redeploy (below). To withdraw a video, set it back and redeploy.
+1. Review the whole video at full resolution *and its audio* (on-screen paths, hostnames/IPs, keys,
+   admin/personal information, patient/user data) and inspect container metadata (`ffprobe`).
+2. Record the reviewed file's identity: `sha256sum content/<file>` and `stat -c %s content/<file>`.
+3. Set `visibility` to `PUBLIC` and add `approved_sha256` / `approved_size_bytes` in a reviewed PR.
+4. Rebuild and redeploy (below). To withdraw a video, set it back and redeploy.
 
-## Build and run
+Recording the hash records **what** was approved; it does not by itself record **that** a human reviewed it.
 
-Build from a pristine export of the approved commit, never from a working tree with local edits:
+## Generated artifacts (`scripts/build_public.py`)
+
+For the manifest and the host media directory it verifies every `PUBLIC` file (regular file, not a
+symlink, non-empty, approved size, approved SHA-256, structurally valid MP4/WebM) and aborts on any
+problem; it copies no media. It emits `dist/public/`:
+
+```
+www/               index.html portal.css portal.js         -> web root
+publication/       approved.tsv                            -> id, sha256, size, filename
+                   entries/<id>.json                       -> the public catalog record (allowlisted fields only)
+                   entries/<id>.conf                       -> location = /videos/<file> { alias /content/<file>; ... }
+```
+
+## Runtime verification (`runtime/publish-runtime.sh`, the container entrypoint)
+
+Mounting the directory does not publish it. At start-up and continuously (default every 5 s, plus a full
+re-hash every 10 min) the publisher checks each approved file on the mount against its approved size and
+SHA-256, and only then generates `media.conf` (nginx locations) and `videos.json` (catalog) from the
+verified set and reloads nginx. A file that is replaced, modified, truncated, deleted or turned into a
+symlink is **delisted and 404s**; if the approved bytes return it is published again. Access is removed
+before the listing and granted before the listing, so the catalog never lists a URL that would 404.
+
+Editing the host `videos.json` or dropping files into the mounted directory publishes nothing: the image
+holds the reviewed publication snapshot, so a visibility change needs a rebuild.
+
+Residual window: a replacement is detected within the poll interval (seconds); a same-size, same-mtime,
+different-bytes in-place swap only at the next full re-hash (default 10 min).
+
+## Deploy
 
 ```bash
 cd ~/Desktop/machine/omnibioai-videos
 SHA=<approved commit>
-BUILD=$(mktemp -d) && git archive "$SHA" | tar -x -C "$BUILD" && cd "$BUILD"
+HOSTCONTENT=$HOME/Desktop/machine/omnibioai-videos/content
+BUILD=$(mktemp -d)
+GIT_LFS_SKIP_SMUDGE=1 git archive "$SHA" | tar -x -C "$BUILD"    # code + reviewed manifest; no media bytes
+cd "$BUILD"
 
-python3 scripts/build_public.py --out dist/public      # prints the visibility inventory; aborts on any problem
-docker build -f Dockerfile.public -t omnibioai-videos-public:"$SHA" -t omnibioai-videos-public:local .
-docker compose -p omnibioai-public-videos \
-  -f ~/Desktop/machine/omnibioai-videos/deploy/docker-compose.public.yml up -d
+python3 scripts/build_public.py --content content --media-dir "$HOSTCONTENT" --out dist/public
+docker build -f Dockerfile.public -t omnibioai-videos-public:"${SHA:0:12}" -t omnibioai-videos-public:local .
+VIDEOS_CONTENT_DIR="$HOSTCONTENT" docker compose -p omnibioai-public-videos \
+  -f "$BUILD/deploy/docker-compose.public.yml" up -d
 
-curl -s http://127.0.0.1:8087/videos.json              # expect [] until something is PUBLIC
+python3 scripts/verify_public_deploy.py container omnibioai-videos-public --content-dir "$HOSTCONTENT" --bundle dist/public
+python3 scripts/verify_public_deploy.py site http://127.0.0.1:8087 --manifest content/videos.json --media-dir "$HOSTCONTENT"
 ```
 
-`git archive` exports Git-LFS media as pointer files. That is fine while nothing is `PUBLIC`; once a
-video is approved, export with a real checkout (`git worktree add --detach "$BUILD" "$SHA"`) so the
-bytes exist and can be hash-verified.
+`git archive` is used with smudging disabled on purpose: the build takes its media **only** from the host
+directory, never from a Git LFS object at some commit, so the bytes verified are the bytes served.
+(`*.mp4` is LFS-tracked in this repo, `.mov`/`.webm` are not; neither matters to the build.)
 
 ## Point the tunnel at it
 
 `scripts/retarget_ingress.py` writes a *proposed* config and prints the diff; it never edits the
 original and refuses unless exactly one `videos.omnibioai.org` entry currently targets the expected port.
-
-```bash
-python scripts/retarget_ingress.py --config /etc/cloudflared/config.yml \
-  --hostname videos.omnibioai.org --from-port 8086 --to-port 8087 --out /tmp/cloudflared.proposed.yml
-# review the diff: exactly one line changes
-sudo cp /etc/cloudflared/config.yml /etc/cloudflared/config.yml.pre-videos-portal-$(date +%Y%m%d).bak
-sudo cp /tmp/cloudflared.proposed.yml /etc/cloudflared/config.yml
-sudo cloudflared tunnel --config /etc/cloudflared/config.yml ingress validate
-sudo systemctl restart cloudflared     # brief reconnect for ALL tunnel hostnames
-```
+Record `scripts/tunnel_baseline.py record` first and `compare ... --allow videos.omnibioai.org` after.
+Cloudflare documents no reload mechanism for a locally-managed tunnel's `config.yml`; it recommends
+running a *replica* with the new config, waiting until it is up, then stopping the old instance
+(https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/local-management/configuration-file/).
+On this host `systemctl show cloudflared` reports `CanReload=no` (the unit has no `ExecReload`) and every
+earlier config change in the journal was applied by a stop/start. The straightforward way to apply the
+change is therefore `systemctl restart cloudflared` (a reconnect of all hostnames, seconds); the replica
+procedure avoids that but needs a second unit with the same tunnel credentials.
 
 ## Rollback
 
-```bash
-sudo cp /etc/cloudflared/config.yml.pre-videos-portal-<date>.bak /etc/cloudflared/config.yml
-sudo systemctl restart cloudflared
-docker compose -p omnibioai-public-videos -f deploy/docker-compose.public.yml down   # optional
-```
-
-(Rolling back restores the previous public exposure of the legacy 8086 service.)
+Restore the backed-up `config.yml` and `systemctl restart cloudflared` (this restores the legacy 8086
+exposure, including the public `my_video.mov` and `guide.html`), then optionally
+`docker rm -f omnibioai-videos-public`.
 
 ## Tests
 
-`python -m pytest tests` -- includes `tests/test_public_portal.py` (visibility model, bundle scan,
-nginx/Docker/compose contract, ingress isolation, and Docker-backed anonymous-client tests with
-synthetic sentinel secrets).
+`python -m pytest tests` -- `tests/test_public_portal.py` covers the visibility model, the hash and
+container gates, the exact-match allowlist, no packaged media, the hardened container, the runtime
+delisting scenarios (replace / truncate / same-size swap / symlink / delete), ingress isolation and
+browser rendering, using synthetic sentinel secrets.

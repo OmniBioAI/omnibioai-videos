@@ -2,13 +2,16 @@
 # from omnibioai-studio's compose file and from the internal `videos` service
 # (port 8086), which is left untouched.
 #
-#   python scripts/build_public.py --out dist/public
-#   docker build -f Dockerfile.public -t omnibioai-videos-public:local .
-#   docker compose -p omnibioai-public-videos -f deploy/docker-compose.public.yml up -d
+#   VIDEOS_CONTENT_DIR=/abs/path/to/omnibioai-videos/content \
+#     docker compose -p omnibioai-public-videos -f deploy/docker-compose.public.yml up -d
 #
-# Bound to loopback only: cloudflared reaches it via localhost:8087, and nothing
-# on the LAN can bypass the tunnel. No volumes, no env, no secrets, no network
-# access to any other OmniBioAI container.
+# The video files stay on the host. The host content directory is mounted READ-ONLY, but
+# possession of the mount does not make files web-accessible: nginx serves only the exact
+# files the runtime verifier has matched to their approved SHA-256 (everything else 404s).
+#
+# Bound to loopback only: cloudflared reaches it via localhost:8087, and nothing on the
+# LAN can bypass the tunnel. No secrets, no environment beyond two polling intervals, and
+# no network access to any other OmniBioAI container.
 services:
   videos-public:
     image: omnibioai-videos-public:local
@@ -16,15 +19,26 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:8087:8087"
+    volumes:
+      - type: bind
+        source: ${VIDEOS_CONTENT_DIR:?set VIDEOS_CONTENT_DIR to the host content directory}
+        target: /content
+        read_only: true
+        bind:
+          create_host_path: false
+    environment:
+      PUBLISH_POLL_SECONDS: "5"
+      PUBLISH_REHASH_SECONDS: "600"
     read_only: true
     tmpfs:
+      - /run:mode=0755
       - /var/cache/nginx
-      - /var/run
       - /tmp
     cap_drop: [ALL]
     cap_add: [CHOWN, SETGID, SETUID]
     security_opt:
       - no-new-privileges:true
+    stop_grace_period: 10s
     networks: [public_videos]
 
 networks:
