@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="no-referrer">
+<title>OmniBioAI · Videos</title>
+<link rel="stylesheet" href="/portal.css">
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-path">
+    <span>omnibioai</span>
+    <span class="sep">/</span>
+    <span class="current">videos</span>
+  </div>
+  <div class="topbar-badges">
+    <span class="pill pill-green" id="statusPill">● LOADING</span>
+    <span class="pill pill-orange">BETA</span>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <video class="modal-video" id="modalVideo" controls></video>
+    <div class="modal-footer">
+      <div>
+        <div class="modal-title" id="modalTitle">—</div>
+        <div class="modal-meta" id="modalMeta">—</div>
+      </div>
+      <button class="modal-close" id="modalClose" type="button" aria-label="Close">✕</button>
+    </div>
+  </div>
+</div>
+
+<div class="page">
+  <div class="page-heading">
+    <h1>Videos</h1>
+    <p>Platform walkthroughs, tutorials and workflow demonstrations</p>
+  </div>
+
+  <div class="controls" id="controls">
+    <div class="search-wrap">
+      <span class="search-icon">⌕</span>
+      <input type="text" id="searchInput" placeholder="Search videos..." autocomplete="off">
+    </div>
+    <button class="filter-btn active" data-tag="all" type="button">All</button>
+    <button class="filter-btn" data-tag="intro" type="button">Intro</button>
+    <button class="filter-btn" data-tag="tutorial" type="button">Tutorial</button>
+    <button class="filter-btn" data-tag="workflow" type="button">Workflow</button>
+    <button class="filter-btn" data-tag="demo" type="button">Demo</button>
+    <button class="filter-btn" data-tag="hpc" type="button">HPC</button>
+    <span class="video-count" id="videoCount"></span>
+  </div>
+
+  <div id="content">
+    <div class="state-box">
+      <div class="spinner"></div>
+      <p>Loading videos...</p>
+    </div>
+  </div>
+</div>
+
+<script src="/portal.js"></script>
+</body>
+</html>

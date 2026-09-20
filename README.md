@@ -14,7 +14,7 @@ Serves tutorial videos, workflow demonstrations, and the interactive Getting Sta
 | Port | `8086` |
 | Base image | `nginx:alpine` |
 | Dependencies | None |
-| Auth | None (internal network only) |
+| Auth | None. This internal service must **not** be exposed publicly; the public site is the separate, allowlist-only portal described in [PUBLIC_PORTAL.md](PUBLIC_PORTAL.md) |
 
 ### Endpoints
 

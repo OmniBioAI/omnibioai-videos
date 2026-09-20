@@ -1,0 +1,10 @@
+# Allowlist for the public image build context (BuildKit prefers
+# <Dockerfile>.dockerignore over .dockerignore). Only the generated PUBLIC
+# bundle and the two files that configure nginx may enter the context: content/,
+# guide.html, the internal index.html and everything else are excluded by
+# default, and .dockerignore's `**/dist` rule (which would strip dist/public)
+# does not apply to this build.
+*
+!Dockerfile.public
+!nginx.public.conf
+!dist/public

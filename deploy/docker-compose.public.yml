@@ -1,0 +1,32 @@
+# Standalone compose project for the PUBLIC video portal. Deliberately separate
+# from omnibioai-studio's compose file and from the internal `videos` service
+# (port 8086), which is left untouched.
+#
+#   python scripts/build_public.py --out dist/public
+#   docker build -f Dockerfile.public -t omnibioai-videos-public:local .
+#   docker compose -p omnibioai-public-videos -f deploy/docker-compose.public.yml up -d
+#
+# Bound to loopback only: cloudflared reaches it via localhost:8087, and nothing
+# on the LAN can bypass the tunnel. No volumes, no env, no secrets, no network
+# access to any other OmniBioAI container.
+services:
+  videos-public:
+    image: omnibioai-videos-public:local
+    container_name: omnibioai-videos-public
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8087:8087"
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+      - /tmp
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETGID, SETUID]
+    security_opt:
+      - no-new-privileges:true
+    networks: [public_videos]
+
+networks:
+  public_videos:
+    driver: bridge

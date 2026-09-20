@@ -38,8 +38,9 @@ def test_docker_image_packages_the_documented_content_root():
 
 
 def test_manifest_entries_are_complete_unique_and_backed_by_files():
-    """Require every manifest entry to have a unique filename and order, exactly its five documented
-    fields, a matching video file on disk, and non-blank string fields."""
+    """Require every manifest entry to have a unique filename and order, exactly its six documented
+    fields (five display fields plus the fail-closed ``visibility`` classification), a matching
+    video file on disk, and non-blank string fields."""
     entries = load_manifest()
     assert isinstance(entries, list) and entries
 
@@ -50,7 +51,10 @@ def test_manifest_entries_are_complete_unique_and_backed_by_files():
     assert orders == sorted(orders)
 
     for entry in entries:
-        assert set(entry) == {"filename", "title", "desc", "tag", "order"}
+        assert set(entry) - {"sha256"} == {"filename", "title", "desc", "tag", "order", "visibility"}
+        assert entry["visibility"] in {"PUBLIC", "INTERNAL", "REVIEW_REQUIRED"}
+        if entry["visibility"] == "PUBLIC":  # approval is pinned to the reviewed bytes
+            assert re.fullmatch(r"[0-9a-f]{64}", entry.get("sha256", ""))
         assert re.fullmatch(r"[^/]+\.(?:mp4|webm|mov)", entry["filename"], re.I)
         assert (CONTENT / entry["filename"]).is_file()
         assert all(isinstance(entry[field], str) and entry[field].strip() for field in ("title", "desc", "tag"))

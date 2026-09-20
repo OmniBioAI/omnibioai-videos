@@ -1,0 +1,15 @@
+# Public video portal image. Build the bundle first so only PUBLIC content is
+# ever in the build context:
+#
+#   python scripts/build_public.py --out dist/public
+#   docker build -f Dockerfile.public -t omnibioai-videos-public:local .
+#
+# If dist/public does not exist the COPY fails, i.e. it fails closed: this image
+# never falls back to copying content/.
+FROM nginx:alpine
+
+RUN rm -rf /usr/share/nginx/html/* /etc/nginx/conf.d/default.conf
+COPY nginx.public.conf /etc/nginx/conf.d/default.conf
+COPY dist/public/ /usr/share/nginx/html/
+
+EXPOSE 8087
