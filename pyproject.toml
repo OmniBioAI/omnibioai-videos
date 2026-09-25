@@ -1,5 +1,5 @@
 [tool.pytest.ini_options]
-addopts = "--cov=tests --cov-report=term-missing --cov-fail-under=95"
+addopts = "--cov=tests --cov-report=term-missing --cov-fail-under=98"
 markers = [
     "docker: tests that build and exercise the nginx image through Docker",
 ]
@@ -12,6 +12,9 @@ markers = [
 # out of the coverage measurement rather than deleted outright -- that's a
 # repo-hygiene call for whoever owns this repo, not this change.
 omit = ["tests/test_video_service.py"]
+# Playwright's sync API drives the browser from greenlets; without greenlet
+# support coverage.py silently drops every line executed inside them.
+concurrency = ["thread", "greenlet"]
 
 [tool.coverage.report]
 omit = ["tests/test_video_service.py"]
