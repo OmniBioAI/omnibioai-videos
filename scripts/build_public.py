@@ -41,12 +41,16 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import html
 import json
+import math
+import os
 import re
 import shutil
 import struct
 import sys
 from pathlib import Path
+from urllib.parse import urlsplit
 
 PUBLIC = "PUBLIC"
 INTERNAL = "INTERNAL"
@@ -57,7 +61,8 @@ UNCLASSIFIED = "UNCLASSIFIED"  # missing / unknown visibility -> treated as non-
 # Only these manifest fields ever reach the public catalog. Optional fields are
 # copied only when present and well-formed.
 REQUIRED_PUBLIC_FIELDS = ("filename", "title", "desc", "tag", "order")
-OPTIONAL_PUBLIC_FIELDS = ("thumbnail", "duration")
+DISCOVERY_LIST_FIELDS = ("tags", "keywords", "services", "modules", "workflows")
+OPTIONAL_PUBLIC_FIELDS = ("thumbnail", "duration", "category", "featured", *DISCOVERY_LIST_FIELDS)
 PUBLIC_FIELDS = (*REQUIRED_PUBLIC_FIELDS, *OPTIONAL_PUBLIC_FIELDS)
 ALLOWED_TAGS = ("intro", "tutorial", "workflow", "demo", "hpc", "documentation")
 FILENAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.(mp4|webm)$")
@@ -65,6 +70,13 @@ THUMBNAIL_RE = re.compile(r"^(?:/[A-Za-z0-9][A-Za-z0-9._/-]{0,180}|[A-Za-z0-9][A
 SHA256_RE = re.compile(r"[0-9a-f]{64}")
 MEDIA_SUFFIXES = (".mp4", ".webm", ".mov")
 CONTENT_MOUNT = "/content"  # where the host content directory is mounted (read-only) in the container
+DEFAULT_STUDIO_URL = "https://webstudio.omnibioai.org"
+STUDIO_LINK_MARKER = 'href="/studio" data-studio-link'
+STUDIO_HOST_RE = re.compile(
+    r"^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)"
+    r"(?:\.(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?))*"
+    r"(?::[0-9]{1,5})?$"
+)
 
 # Static portal files copied verbatim into the web root (allowlist).
 PORTAL_FILES = ("index.html", "portal.css", "portal.js")
@@ -95,6 +107,43 @@ TEXT_SUFFIXES = (".html", ".htm", ".js", ".mjs", ".css", ".json", ".txt", ".svg"
 
 class PublishError(Exception):
     """Raised when the public bundle cannot be built safely."""
+
+
+def validate_studio_url(value: str) -> str:
+    """Validate a Studio origin before embedding it in the public portal.
+
+    Production/staging origins must use HTTPS. Plain HTTP is allowed only for
+    loopback development servers. Paths, credentials, queries, fragments and
+    non-HTTP schemes are rejected so the caller can append exactly ``/studio``.
+    """
+    if (
+        not isinstance(value, str)
+        or not value
+        or value != value.strip()
+        or len(value) > 300
+        or "?" in value
+        or "#" in value
+    ):
+        raise PublishError("STUDIO_URL must be a non-empty Studio origin")
+    try:
+        parsed = urlsplit(value)
+        hostname = parsed.hostname or ""
+        port = parsed.port
+    except ValueError:
+        raise PublishError("STUDIO_URL is malformed") from None
+    if (
+        parsed.scheme not in ("https", "http")
+        or not hostname
+        or not STUDIO_HOST_RE.fullmatch(parsed.netloc)
+        or parsed.path not in ("", "/")
+        or parsed.query
+        or parsed.fragment
+        or (port is not None and not 1 <= port <= 65535)
+    ):
+        raise PublishError("STUDIO_URL must be an origin without credentials, path, query, or fragment")
+    if parsed.scheme == "http" and hostname.lower() not in {"localhost", "127.0.0.1"}:
+        raise PublishError("STUDIO_URL may use HTTP only for localhost development")
+    return f"{parsed.scheme}://{parsed.netloc.lower()}"
 
 
 def classify(entry) -> str:
@@ -236,12 +285,29 @@ def _validate_public_entry(entry: dict, media_dir: Path) -> dict:
         projected["thumbnail"] = thumbnail
     duration = entry.get("duration")
     if (isinstance(duration, str) and duration.strip()) or (
-        isinstance(duration, (int, float)) and not isinstance(duration, bool) and duration > 0
+        isinstance(duration, (int, float)) and not isinstance(duration, bool) and math.isfinite(duration) and duration > 0
     ):
         projected["duration"] = duration
-    findings = scan_text(f"{projected['title']}\n{projected['desc']}\n{projected.get('thumbnail', '')}\n{projected.get('duration', '')}")
+    category = entry.get("category")
+    if isinstance(category, str) and 0 < len(category.strip()) <= 80 and category.strip().casefold() != "all":
+        projected["category"] = category.strip()
+    if isinstance(entry.get("featured"), bool):
+        projected["featured"] = entry["featured"]
+    for field in DISCOVERY_LIST_FIELDS:
+        values = entry.get(field)
+        if isinstance(values, list):
+            projected[field] = list(dict.fromkeys(
+                value.strip() for value in values
+                if isinstance(value, str) and 0 < len(value.strip()) <= 120
+            ))[:32]
+    # Scan every exported field, including discovery terms, before it can reach
+    # either the browser's search index or the runtime catalog fragments.
+    findings = scan_text("\n".join(
+        str(value) for field in projected.values()
+        for value in (field if isinstance(field, list) else [field])
+    ))
     if findings:
-        raise PublishError(f"{name}: title/description contain forbidden content: {findings}")
+        raise PublishError(f"{name}: public metadata contains forbidden content: {findings}")
     return {"public": projected, "sha256": approved_sha, "size": approved_size}
 
 
@@ -299,12 +365,16 @@ def build(
     out_dir: Path,
     media_dir: Path | None = None,
     manifest_path: Path | None = None,
+    studio_url: str | None = None,
 ) -> dict:
     """Generate the publication artifacts in ``out_dir`` (recreated from scratch).
 
     ``content_dir`` holds ``videos.json`` unless ``manifest_path`` is given; ``media_dir`` (default
     ``content_dir``) is the host directory whose files are verified against the approved hashes.
     """
+    studio_origin = validate_studio_url(
+        studio_url if studio_url is not None else os.environ.get("STUDIO_URL", DEFAULT_STUDIO_URL)
+    )
     manifest = load_manifest(manifest_path or content_dir / "videos.json")
     items, report = select_public(manifest, media_dir or content_dir)
 
@@ -320,6 +390,16 @@ def build(
 
     for name in PORTAL_FILES:
         shutil.copyfile(portal_dir / name, out_dir / "www" / name)
+
+    index_path = out_dir / "www" / "index.html"
+    index = index_path.read_text(encoding="utf-8")
+    if index.count(STUDIO_LINK_MARKER) != 1:
+        shutil.rmtree(out_dir)
+        raise PublishError("portal index must contain exactly one Studio link marker")
+    index_path.write_text(
+        index.replace(STUDIO_LINK_MARKER, f'href="{html.escape(studio_origin, quote=True)}/studio"'),
+        encoding="utf-8",
+    )
 
     tsv = []
     for index, item in enumerate(items, 1):
@@ -350,10 +430,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--media-dir", type=Path, help="host media directory to verify (default: --content)")
     parser.add_argument("--portal", type=Path, default=Path("portal"))
     parser.add_argument("--out", type=Path, default=Path("dist/public"))
+    parser.add_argument(
+        "--studio-url",
+        default=os.environ.get("STUDIO_URL", DEFAULT_STUDIO_URL),
+        help=("public Studio origin (HTTPS; defaults to %(default)s). "
+              "STUDIO_URL may also be set in the environment; localhost HTTP is allowed for development."),
+    )
     args = parser.parse_args(argv)
 
     try:
-        report = build(args.content, args.portal, args.out, args.media_dir, args.manifest)
+        report = build(args.content, args.portal, args.out, args.media_dir, args.manifest, args.studio_url)
     except PublishError as exc:
         print(f"BUILD FAILED (nothing published): {exc}", file=sys.stderr)
         return 1

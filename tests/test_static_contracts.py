@@ -51,8 +51,12 @@ def test_manifest_entries_are_complete_unique_and_backed_by_files():
     assert orders == sorted(orders)
 
     for entry in entries:
-        assert set(entry) - {"approved_sha256", "approved_size_bytes"} == {
-            "filename", "title", "desc", "tag", "order", "visibility"}
+        assert set(entry) <= {
+            "filename", "title", "desc", "tag", "order", "visibility",
+            "approved_sha256", "approved_size_bytes", "thumbnail", "duration", "category",
+            "featured", "tags", "keywords", "services", "modules", "workflows",
+        }
+        assert {"filename", "title", "desc", "tag", "order", "visibility"} <= set(entry)
         assert entry["visibility"] in {"PUBLIC", "INTERNAL", "REVIEW_REQUIRED"}
         if entry["visibility"] == "PUBLIC":  # approval is pinned to the exact reviewed bytes
             assert re.fullmatch(r"[0-9a-f]{64}", entry["approved_sha256"])

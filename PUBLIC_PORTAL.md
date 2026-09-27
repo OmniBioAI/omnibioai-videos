@@ -43,6 +43,90 @@ approved. Approval is bound to content, not to a filename.
 
 Recording the hash records **what** was approved; it does not by itself record **that** a human reviewed it.
 
+## Searchable Video Tutorials library
+
+`portal/index.html`, `portal/portal.js`, and `portal/portal.css` implement the public library,
+independently of the internal player. The browser fetches `/videos.json` once, without credentials,
+then searches and filters that eligible snapshot locally. It never fetches the source manifest.
+Counts, sections, category chips, and autocomplete all use the same authorized records.
+`REVIEW_REQUIRED`, `INTERNAL`, unclassified, and hash-withheld entries contribute no filenames,
+titles, descriptions, categories, or discovery terms. Runtime delisting and media allowlisting
+are unchanged; reload the page to refresh an already-open browser's catalog snapshot.
+
+Search matches title, `desc`, category, legacy `tag`, and the discovery lists below. Matching is
+case-insensitive and ignores accents, punctuation, and spacing variants such as `RNA-seq`,
+`rnaseq`, and `RNA seq`. Multiple query words must all match. Search and category filters combine;
+clearing search keeps the selected category, and **All** resets the category.
+
+Autocomplete shows up to eight distinct video, keyword, and category suggestions from eligible
+metadata within the selected category. Use ↑/↓ and Enter or click a suggestion. Video suggestions
+open the player; keywords refine the search; category suggestions select that category and clear
+the query. Escape, Tab, or clicking outside closes the list. The combobox/listbox announces its
+selection, result counts are announced politely, and cards/chips support keyboard access.
+
+`?q=rnaseq&category=workflows` bookmarks a filtered view; category IDs use lowercase labels with
+punctuation/spacing replaced by hyphens (for example `AI & RAG` → `ai-rag`). The browser updates
+the URL without navigation or a network search. The `← Back to Studio` link targets the Studio
+origin configured at public-build time, followed by `/studio`. The default is
+`https://webstudio.omnibioai.org/studio`; Studio origin and video portal are separate public
+hosts, so the portal does not proxy `/studio` through its restricted nginx service.
+
+Set the non-secret `STUDIO_URL` environment variable, or pass `--studio-url`, to select another
+Studio origin when building for a deployment or local environment. The value must be a bare HTTPS
+origin without credentials, path, query, or fragment. HTTP is accepted only for `localhost` or
+`127.0.0.1` development servers. If unset, the production Studio origin above is used. The value
+is embedded only into the built portal's Back to Studio link; no runtime endpoint or credential is
+added. For example, a local Studio server can use `STUDIO_URL=http://localhost:5173`.
+
+### Optional discovery metadata
+
+The existing required fields remain `filename`, `title`, `desc`, `tag`, and integer `order`, plus
+the existing publication approval fields for a `PUBLIC` entry. The existing six `tag` values
+remain valid. No new field is required on legacy entries.
+
+| Field | Type | Behavior |
+|-------|------|----------|
+| `category` | Nonempty string, at most 80 characters | Main category; defaults to the legacy tag label. `All` is reserved. |
+| `tags` | Array of strings | Topic terms and aliases, such as `rna-seq`, `transcriptomics`. Separate from the legacy singular `tag`. |
+| `keywords` | Array of strings | Additional discovery phrases. |
+| `services`, `modules`, `workflows` | Arrays of strings | Service/module/workflow names to match and suggest. |
+| `featured` | Boolean | `true` moves a video into the top Featured section in the unfiltered library. Defaults to false. |
+| `duration` | Positive finite seconds or a display string | Duration badge, e.g. `754` or `12:34`; omitted when unavailable. |
+| `thumbnail` | Existing validated local image path | Optional image preview; the current bundle does not generate or publish additional image files. |
+
+Example discovery fields to add to an existing approved record:
+
+```json
+{
+  "category": "Workflows",
+  "tags": ["rna-seq", "transcriptomics"],
+  "keywords": ["differential expression"],
+  "services": ["Nextflow"],
+  "modules": ["Workflow Runner"],
+  "workflows": ["nf-core RNA-seq"],
+  "featured": false,
+  "duration": "12:34"
+}
+```
+
+Optional malformed fields are omitted; lists retain up to 32 distinct, nonempty strings of at
+most 120 characters each. Every exported field is scanned for forbidden content, including the
+new discovery fields. Unknown/internal fields remain excluded by the public projection. Metadata
+on an approved record is public-facing copy and must be reviewed before rebuilding the image.
+
+Chips and sections appear only for populated categories. Preferred order is Getting Started,
+Platform, Workflows, AI & RAG, Bioinformatics, Security, Administration, Documentation, followed
+by legacy tag categories and then other category names alphabetically. Videos retain ascending
+`order`, then filename as the tie-breaker. Featured videos appear once in the unfiltered library
+and still participate in category/search results. No dates or “recently added” status are inferred.
+
+The grid supports five columns on wide desktops, four on normal desktops, two to three on
+tablets, and one on narrow phones. Chips scroll horizontally. Cards retain 16:9 thumbnails,
+play controls, optional duration badges, and clamped titles/descriptions. Missing images use the
+existing branded fallback; absent image metadata uses a video-frame preview loaded only near
+the viewport. Search indexes are computed once and card DOM is reused while filtering, avoiding
+recreated media previews for every keystroke. No backend search or virtualization is required.
+
 ## Generated artifacts (`scripts/build_public.py`)
 
 For the manifest and the host media directory it verifies every `PUBLIC` file (regular file, not a
@@ -81,7 +165,7 @@ BUILD=$(mktemp -d)
 GIT_LFS_SKIP_SMUDGE=1 git archive "$SHA" | tar -x -C "$BUILD"    # code + reviewed manifest; no media bytes
 cd "$BUILD"
 
-python3 scripts/build_public.py --content content --media-dir "$HOSTCONTENT" --out dist/public
+STUDIO_URL=https://webstudio.omnibioai.org python3 scripts/build_public.py --content content --media-dir "$HOSTCONTENT" --out dist/public
 docker build -f Dockerfile.public -t omnibioai-videos-public:"${SHA:0:12}" -t omnibioai-videos-public:local .
 VIDEOS_CONTENT_DIR="$HOSTCONTENT" docker compose -p omnibioai-public-videos \
   -f "$BUILD/deploy/docker-compose.public.yml" up -d
@@ -119,3 +203,11 @@ exposure, including the public `my_video.mov` and `guide.html`), then optionally
 container gates, the exact-match allowlist, no packaged media, the hardened container, the runtime
 delisting scenarios (replace / truncate / same-size swap / symlink / delete), ingress isolation and
 browser rendering, using synthetic sentinel secrets.
+
+`tests/test_video_library.py` adds browser coverage for metadata search/normalization, combined
+filters, autocomplete keyboard/click/dismissal behavior, URL state, accessibility, empty/malformed
+metadata, public-only suggestions, and a 100-video catalog from 320px to 1920px. It also verifies
+the optional metadata projection and secret scanning. Run the full suite with its configured
+98% coverage gate using `python -m pytest tests`; Docker fixtures build isolated test images and
+exercise publication gates without changing the production service. Generated `dist/` is ignored;
+build into a temporary output directory when reviewing changes locally.

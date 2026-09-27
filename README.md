@@ -4,6 +4,18 @@ Video library and Getting Started guide service for the OmniBioAI Studio platfor
 
 Serves tutorial videos, workflow demonstrations, and the interactive Getting Started guide — all via a single nginx container with zero backend dependencies.
 
+The **public Video Tutorials library** lives in `portal/` and is built separately from the
+internal player in `content/index.html`. It provides instant search, keyboard autocomplete,
+metadata-driven category chips, optional Featured placement, and a responsive video grid.
+Search covers titles, descriptions, categories, tags, keywords, services, modules, and workflows;
+`RNA-seq`, `rnaseq`, and `RNA seq` are equivalent discovery terms. Filters can be bookmarked
+with `?q=rnaseq&category=workflows`. The `← Back to Studio` link targets the canonical
+Studio portal at `https://webstudio.omnibioai.org/studio` by default.
+
+**Public search and autocomplete use only the runtime-verified public catalog.** They never
+load the source manifest or discover files by directory listing. See [PUBLIC_PORTAL.md](PUBLIC_PORTAL.md)
+for the optional discovery schema and the approval/build/runtime publication rules.
+
 ---
 
 ## Overview
@@ -45,7 +57,9 @@ omnibioai-videos/
 
 ## videos.json — Video Manifest
 
-All videos are configured via `videos.json`. Edit this file to add, rename, reorder or retag videos — **no rebuild required**, just refresh the browser.
+All videos are configured via `videos.json`. For the **internal player**, edit this file to add,
+rename, reorder or retag videos — no rebuild required, just refresh the browser. The **public
+portal always requires a reviewed rebuild** for metadata or publication changes.
 
 ### Format
 

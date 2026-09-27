@@ -571,7 +571,8 @@ def test_portal_is_read_only_and_credential_free():
     for source in (html, js, css):
         assert "http://" not in source and "https://" not in source
     assert "documentation" in js
-    assert 'data-tag="documentation"' in html and ">Documentation<" in html
+    # Category controls are derived from the eligible catalog, not static chips.
+    assert 'id="categoryFilters"' in html and "prepareDiscovery()" in js
     assert ".tag-documentation" in css
     # nothing that a strict CSP (no unsafe-inline) would block or that hides behaviour in markup
     assert "onclick=" not in html and " style=" not in html

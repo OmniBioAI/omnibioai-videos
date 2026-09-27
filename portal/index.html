@@ -4,13 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="referrer" content="no-referrer">
-<title>OmniBioAI · Videos</title>
+<title>OmniBioAI · Video Tutorials</title>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="/portal.css">
 </head>
 <body>
 
 <div class="topbar">
+  <a class="back-to-studio" href="/studio" data-studio-link>← Back to Studio</a>
   <div class="topbar-path">
     <span>omnibioai</span>
     <span class="sep">/</span>
@@ -22,7 +23,7 @@
   </div>
 </div>
 
-<div class="modal-overlay" id="modal">
+<div class="modal-overlay" id="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
   <div class="modal">
     <video class="modal-video" id="modalVideo" controls></video>
     <div class="modal-footer">
@@ -35,26 +36,24 @@
   </div>
 </div>
 
-<div class="page">
+<main class="page">
   <div class="page-heading">
-    <h1>Videos</h1>
+    <div class="heading-row"><h1>Video Tutorials</h1><span class="video-count" id="videoCount"></span></div>
     <p>Platform walkthroughs, tutorials and workflow demonstrations</p>
   </div>
 
   <div class="controls" id="controls">
     <div class="search-wrap">
-      <span class="search-icon">⌕</span>
-      <input type="text" id="searchInput" placeholder="Search videos..." autocomplete="off">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input type="text" id="searchInput" placeholder="Search OmniBioAI videos..." autocomplete="off"
+        aria-label="Search OmniBioAI videos" role="combobox" aria-autocomplete="list"
+        aria-controls="suggestions" aria-expanded="false">
+      <button id="clearSearch" class="clear-search" type="button" aria-label="Clear search" hidden>✕</button>
+      <div id="suggestions" class="suggestions" role="listbox" aria-label="Search suggestions" hidden></div>
     </div>
-    <button class="filter-btn active" data-tag="all" type="button">All</button>
-    <button class="filter-btn" data-tag="intro" type="button">Intro</button>
-    <button class="filter-btn" data-tag="tutorial" type="button">Tutorial</button>
-    <button class="filter-btn" data-tag="workflow" type="button">Workflow</button>
-    <button class="filter-btn" data-tag="demo" type="button">Demo</button>
-    <button class="filter-btn" data-tag="hpc" type="button">HPC</button>
-    <button class="filter-btn" data-tag="documentation" type="button">Documentation</button>
-    <span class="video-count" id="videoCount"></span>
+    <div id="categoryFilters" class="category-filters" role="group" aria-label="Video categories"></div>
   </div>
+  <p id="resultStatus" class="result-status" role="status" aria-live="polite" aria-atomic="true"></p>
 
   <div id="content">
     <div class="state-box">
@@ -62,7 +61,7 @@
       <p>Loading videos...</p>
     </div>
   </div>
-</div>
+</main>
 
 <script src="/portal.js"></script>
 </body>
