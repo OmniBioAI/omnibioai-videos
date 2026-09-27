@@ -127,6 +127,19 @@ existing branded fallback; absent image metadata uses a video-frame preview load
 the viewport. Search indexes are computed once and card DOM is reused while filtering, avoiding
 recreated media previews for every keystroke. No backend search or virtualization is required.
 
+### Studio build (`--variant studio`, `videos:8086`)
+
+Studio's Video Tutorials page (`/_svc/videos/`, proxied to `videos:8086` without authentication)
+embeds a variant of this same portal. `build_studio()` reuses `select_public()` unchanged, so its
+catalog is the public projection of the verified PUBLIC entries (minus `thumbnail`, since the image
+serves no image files). Exact, count-checked rewrites make the asset, catalog and media URLs
+document-relative and drop the portal's own Back to Studio link; a portal change that breaks a
+rewrite marker fails the build. The approved media is copied into `dist/studio/media/`, re-hashed,
+and baked into `Dockerfile.studio`; `nginx.studio.conf` has one exact-match location per approved
+file (plus its legacy root URL), no generic alias, no SPA fallback, no CORS, and allows framing only
+by the same origin. Unlike the public service there is no runtime re-verification: the image holds
+the verified bytes. Tests: `tests/test_studio_library.py`.
+
 ## Generated artifacts (`scripts/build_public.py`)
 
 For the manifest and the host media directory it verifies every `PUBLIC` file (regular file, not a

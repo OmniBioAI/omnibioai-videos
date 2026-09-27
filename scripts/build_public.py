@@ -30,9 +30,27 @@ Output layout (``--out``)::
     publication/entries/<id>.json              one public catalog record
     publication/entries/<id>.conf              exact-match nginx location for that file
 
+Studio variant (``--variant studio``)
+-------------------------------------
+The same portal source and the same PUBLIC selection/verification also build the
+Studio "Video Tutorials" service (``videos:8086``, reached through Studio's
+same-origin ``/_svc/videos/`` route). That route has no authentication of its
+own, so it gets exactly the public catalog: PUBLIC, hash-verified, allowlisted
+fields only. The variant differs only in presentation plumbing -- asset, catalog
+and media URLs become document-relative so the page works under the proxy
+prefix, and the portal's own "Back to Studio" link is dropped because Studio's
+shell already supplies that navigation. Its image bakes in the approved media
+(copied here and re-verified), so the layout is::
+
+    www/index.html, portal.css, portal.js      web root (rewritten portal)
+    www/videos.json                            the catalog (PUBLIC projection)
+    nginx/media.conf                           exact-match locations for approved files
+    media/<file>                               approved, re-verified media only
+
 Usage::
 
     python scripts/build_public.py [--content content] [--media-dir DIR] [--portal portal] [--out dist/public]
+    python scripts/build_public.py --variant studio [--content content] [--media-dir DIR] [--out dist/studio]
 
 Developer: Manish Kumar <manish@omnibioai.org>
 """
@@ -100,6 +118,24 @@ FORBIDDEN_PATTERNS = {
         r"\b(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})\b"
     ),
     "visibility-marker": re.compile(r"\b(?:REVIEW_REQUIRED|INTERNAL)\b"),
+}
+
+# Studio variant: where the image keeps approved media, and the exact, count-checked
+# rewrites that turn the public portal into the Studio-embedded build. Each ``old``
+# must occur exactly once in the portal source or the build fails, so a portal edit
+# can never silently leave an absolute URL (which would escape /_svc/videos/) behind.
+STUDIO_MEDIA_ROOT = "/usr/share/nginx/media"
+STUDIO_REWRITES = {
+    "index.html": (
+        ('<link rel="stylesheet" href="/portal.css">', '<link rel="stylesheet" href="portal.css">'),
+        ('<script src="/portal.js"></script>', '<script src="portal.js"></script>'),
+        ('  <a class="back-to-studio" href="/studio" data-studio-link>← Back to Studio</a>\n', ""),
+        ("<span>omnibioai</span>", "<span>studio</span>"),
+    ),
+    "portal.js": (
+        ("fetch('/videos.json',", "fetch('videos.json',"),
+        ("url: '/videos/' + encodeURIComponent(v.filename)", "url: 'videos/' + encodeURIComponent(v.filename)"),
+    ),
 }
 
 TEXT_SUFFIXES = (".html", ".htm", ".js", ".mjs", ".css", ".json", ".txt", ".svg", ".map", ".xml", ".tsv", ".conf")
@@ -423,13 +459,97 @@ def build(
     return report
 
 
+def studio_location_blocks(filename: str) -> str:
+    """Exact-match locations for one approved file baked into the Studio image.
+
+    ``/videos/<file>`` is what the library requests; ``/<file>`` keeps the media URL used by
+    earlier Studio releases working, so the two can be deployed in either order.
+    """
+    return "".join(
+        f"location = {path} {{\n"
+        f"    alias {STUDIO_MEDIA_ROOT}/{filename};\n"
+        "    types { video/mp4 mp4; video/webm webm; }\n"
+        "    default_type application/octet-stream;\n"
+        "    disable_symlinks on;\n"
+        "    expires 5m;\n"
+        "}\n"
+        for path in (f"/videos/{filename}", f"/{filename}")
+    )
+
+
+def build_studio(
+    content_dir: Path,
+    portal_dir: Path,
+    out_dir: Path,
+    media_dir: Path | None = None,
+    manifest_path: Path | None = None,
+) -> dict:
+    """Generate the Studio (videos:8086) bundle in ``out_dir`` (recreated from scratch).
+
+    Uses the public selection unchanged: only PUBLIC, hash-verified entries and their
+    allowlisted fields. ``thumbnail`` is dropped because the image serves no image files.
+    """
+    media_dir = media_dir or content_dir
+    manifest = load_manifest(manifest_path or content_dir / "videos.json")
+    items, report = select_public(manifest, media_dir)
+
+    for name in PORTAL_FILES:
+        if not (portal_dir / name).is_file():
+            raise PublishError(f"portal file missing: {portal_dir / name}")
+
+    if out_dir.exists():
+        shutil.rmtree(out_dir)
+    for sub in ("www", "nginx", "media"):
+        (out_dir / sub).mkdir(parents=True)
+
+    def fail(message: str) -> PublishError:
+        shutil.rmtree(out_dir)
+        return PublishError(message)
+
+    for name in PORTAL_FILES:
+        text = (portal_dir / name).read_text(encoding="utf-8")
+        for old, new in STUDIO_REWRITES.get(name, ()):
+            if text.count(old) != 1:
+                raise fail(f"portal {name} must contain exactly one {old.strip()!r} for the Studio build")
+            text = text.replace(old, new)
+        (out_dir / "www" / name).write_text(text, encoding="utf-8")
+
+    catalog = [{k: v for k, v in i["public"].items() if k != "thumbnail"} for i in items]
+    (out_dir / "www" / "videos.json").write_text(
+        json.dumps(catalog, separators=(",", ":"), ensure_ascii=False), encoding="utf-8"
+    )
+    conf = []
+    for item in items:
+        filename = item["public"]["filename"]
+        target = out_dir / "media" / filename
+        shutil.copyfile(media_dir / filename, target)
+        # Verify the bytes that will enter the image, not just the source they came from.
+        if target.stat().st_size != item["size"] or sha256_file(target) != item["sha256"]:
+            raise fail(f"{filename}: copied media does not match its approval; source changed during the build")
+        conf.append(studio_location_blocks(filename))
+    (out_dir / "nginx" / "media.conf").write_text("".join(conf), encoding="utf-8")
+
+    hits = scan_tree(out_dir / "www") + scan_tree(out_dir / "nginx")
+    if hits:
+        detail = "; ".join(f"{path}: {pattern}" for path, pattern in hits)
+        raise fail(f"forbidden content in Studio bundle: {detail}")
+
+    report["published"] = [i["public"]["filename"] for i in items]
+    report["approved"] = {i["public"]["filename"]: {"sha256": i["sha256"], "size": i["size"]} for i in items}
+    return report
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--content", type=Path, default=Path("content"), help="directory holding videos.json")
     parser.add_argument("--manifest", type=Path, help="videos.json path (default: <content>/videos.json)")
     parser.add_argument("--media-dir", type=Path, help="host media directory to verify (default: --content)")
     parser.add_argument("--portal", type=Path, default=Path("portal"))
-    parser.add_argument("--out", type=Path, default=Path("dist/public"))
+    parser.add_argument(
+        "--variant", choices=("public", "studio"), default="public",
+        help="public: videos.omnibioai.org bundle; studio: Studio's videos:8086 image (PUBLIC catalog only)",
+    )
+    parser.add_argument("--out", type=Path, help="output directory (default: dist/<variant>)")
     parser.add_argument(
         "--studio-url",
         default=os.environ.get("STUDIO_URL", DEFAULT_STUDIO_URL),
@@ -438,8 +558,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    out = args.out or Path("dist") / args.variant
     try:
-        report = build(args.content, args.portal, args.out, args.media_dir, args.manifest, args.studio_url)
+        if args.variant == "studio":
+            report = build_studio(args.content, args.portal, out, args.media_dir, args.manifest)
+        else:
+            report = build(args.content, args.portal, out, args.media_dir, args.manifest, args.studio_url)
     except PublishError as exc:
         print(f"BUILD FAILED (nothing published): {exc}", file=sys.stderr)
         return 1
@@ -449,7 +573,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  {name:<16}{count}")
     if report["unregistered_media"]:
         print(f"  unregistered media (NOT published): {', '.join(report['unregistered_media'])}")
-    print(f"Publication artifacts for {len(report['published'])} video(s) written to {args.out} (no media copied)")
+    copied = "approved media copied and re-verified" if args.variant == "studio" else "no media copied"
+    print(f"Publication artifacts for {len(report['published'])} video(s) written to {out} ({copied})")
     for name, approval in report["approved"].items():
         print(f"  + {name}  size={approval['size']}  sha256={approval['sha256']}")
     return 0

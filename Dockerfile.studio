@@ -1,0 +1,18 @@
+# Studio "Video Tutorials" image (videos:8086): nginx + the Studio build of the searchable
+# video library + the PUBLIC, hash-verified catalog + only the approved media files, each
+# re-verified after copying. It never copies content/, so REVIEW_REQUIRED / INTERNAL /
+# unregistered videos, their metadata and guide.html are not in the image.
+#
+#   python scripts/build_public.py --variant studio --content content --out dist/studio
+#   docker build -f Dockerfile.studio -t ghcr.io/omnibioai/omnibioai-videos:latest .
+#
+# If dist/studio does not exist the COPY fails, i.e. it fails closed.
+FROM nginx:alpine
+
+RUN rm -rf /usr/share/nginx/html/* /etc/nginx/conf.d/default.conf
+COPY nginx.studio.conf /etc/nginx/conf.d/default.conf
+COPY dist/studio/nginx/ /etc/nginx/studio/
+COPY dist/studio/www/ /usr/share/nginx/html/
+COPY dist/studio/media/ /usr/share/nginx/media/
+
+EXPOSE 8086

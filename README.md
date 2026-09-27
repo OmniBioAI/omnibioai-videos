@@ -16,6 +16,26 @@ Studio portal at `https://webstudio.omnibioai.org/studio` by default.
 load the source manifest or discover files by directory listing. See [PUBLIC_PORTAL.md](PUBLIC_PORTAL.md)
 for the optional discovery schema and the approval/build/runtime publication rules.
 
+### Studio Video Tutorials (`videos:8086`)
+
+Studio's **Video Tutorials** page embeds the same library at its same-origin route
+`/_svc/videos/` (Studio keeps its own `← Back to Studio` toolbar). The Studio build is a
+variant of the public portal, not a second implementation: `scripts/build_public.py --variant studio`
+reuses `portal/` with document-relative URLs and without the portal's own Back to Studio link,
+and reuses the public selection, so **Studio lists and serves exactly the PUBLIC, hash-verified
+catalog**. `/_svc/videos` has no authentication of its own at the Studio router, so REVIEW_REQUIRED,
+INTERNAL and unregistered videos, their metadata and `guide.html` are not in the image at all.
+
+```bash
+python scripts/build_public.py --variant studio --content content --out dist/studio
+docker build -f Dockerfile.studio -t ghcr.io/omnibioai/omnibioai-videos:latest .
+```
+
+The image bakes in only the approved media (copied and re-verified against the approved SHA-256),
+serves it at `/videos/<file>` and at the legacy `/<file>` URL, and answers 404 for everything
+else. The legacy `Dockerfile` / `content/index.html` below package the whole `content/` directory
+and every manifest entry; do not use them for Studio.
+
 ---
 
 ## Overview

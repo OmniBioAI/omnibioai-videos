@@ -1,0 +1,8 @@
+# Allowlist for the Studio image build context (BuildKit prefers <Dockerfile>.dockerignore
+# over .dockerignore). Only the generated Studio bundle and its nginx config may enter the
+# context: content/ (and so every unapproved video), guide.html and the legacy internal
+# index.html are excluded, and .dockerignore's `**/dist` rule does not apply to this build.
+*
+!Dockerfile.studio
+!nginx.studio.conf
+!dist/studio
