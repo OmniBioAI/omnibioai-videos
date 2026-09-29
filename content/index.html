@@ -408,7 +408,11 @@
 </div>
 
 <script>
-const API = window.location.origin;
+// The Studio router mounts this service under /_svc/videos; use that prefix
+// when embedded, while retaining the root URL for direct service access.
+const API = window.location.pathname.startsWith('/_svc/videos')
+  ? `${window.location.origin}/_svc/videos`
+  : window.location.origin;
 let allVideos = [];
 let currentFilter = 'all';
 let usingManifest = false;
@@ -417,9 +421,15 @@ let usingManifest = false;
 async function loadVideos() {
   // Try manifest first
   try {
-    const res = await fetch(`${API}/videos/videos.json`);
-    if (res.ok) {
-      const manifest = await res.json();
+    const res = await fetch(`${API}/videos.json`, { cache: 'no-store' });
+    const contentType = res.headers.get('content-type') || '';
+    if (!res.ok) throw new Error(`catalog request failed (${res.status})`);
+    if (!/^(application\/json|[^;]+\/json)(?:;|$)/i.test(contentType)) {
+      throw new Error(`catalog returned ${contentType || 'an unknown content type'}`);
+    }
+    const manifest = await res.json();
+    if (!Array.isArray(manifest)) throw new Error('catalog has an invalid structure');
+    {
       // Sort by order field
       manifest.sort((a, b) => (a.order || 999) - (b.order || 999));
       allVideos = manifest.map(v => ({
@@ -428,7 +438,8 @@ async function loadVideos() {
         desc: v.desc || '',
         tag: v.tag || guessTag(v.filename),
         order: v.order || 999,
-        url: `${API}/videos/${v.filename}`,
+        // Use the approved file digest as a cache key so replaced videos load immediately.
+        url: `${API}/videos/${v.filename}${v.approved_sha256 ? `?v=${v.approved_sha256}` : ''}`,
       }));
       usingManifest = true;
       showManifestHint(true);
@@ -436,7 +447,9 @@ async function loadVideos() {
       renderVideos(allVideos);
       return;
     }
-  } catch {}
+  } catch (error) {
+    console.error('Unable to load video catalog:', error);
+  }
 
   // Fallback: nginx autoindex
   try {
@@ -464,15 +477,15 @@ async function loadVideos() {
     showManifestHint(false);
     document.getElementById('statusPill').textContent = `● ${allVideos.length} VIDEOS`;
     renderVideos(allVideos);
-  } catch {
+  } catch (error) {
+    console.error('Unable to discover video media:', error);
     document.getElementById('content').innerHTML = `
       <div class="state-box">
         <div class="state-icon">📂</div>
-        <h3>No videos yet</h3>
-        <p>Upload .mp4 files and create <code>videos.json</code> to get started.<br><br>
-        Path: <code>~/Desktop/machine/omnibioai-videos/content/</code></p>
+        <h3>Videos unavailable</h3>
+        <p>The video catalog could not be loaded. Please try again later.</p>
       </div>`;
-    document.getElementById('statusPill').textContent = '● EMPTY';
+    document.getElementById('statusPill').textContent = '● UNAVAILABLE';
   }
 }
 

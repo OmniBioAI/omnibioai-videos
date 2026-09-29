@@ -513,14 +513,44 @@ def test_repo_public_entries_carry_a_valid_content_approval():
     public = [e for e in manifest if e.get("visibility") == "PUBLIC"]
     expected_public = {
         "intro_getting_started.mp4": {
-            "approved_sha256": "22a84d99968a07acd89e53ca4f893ab23b4e625619f2973a8646f6e9ba06c180",
-            "approved_size_bytes": 879583564,
+            "approved_sha256": "477698472c4672bb43669264ec80fc21c2fc7719d2619de012d0de8447b73963",
+            "approved_size_bytes": 59918831,
             "tag": "intro",
+        },
+        "contol_center.mp4": {
+            "approved_sha256": "ce5eaa8b1b85a3bfb2713578281512f8c0fbc76204e21d40a96fda93aa1ad55c",
+            "approved_size_bytes": 15587296,
+            "tag": "demo",
+        },
+        "tes.mp4": {
+            "approved_sha256": "9087c15ed7d0335e1c29bf4eec1ddd642e9ad7a35f9ce2b0659e6fc4f342b98c",
+            "approved_size_bytes": 15077207,
+            "tag": "tutorial",
+        },
+        "workflow.mp4": {
+            "approved_sha256": "2e6afc4962ff6bc70d53900c75356c60b9fe6d75279ebad123a17a78e41a851f",
+            "approved_size_bytes": 12128943,
+            "tag": "workflow",
+        },
+        "tool_images.mp4": {
+            "approved_sha256": "b31a9382c6bd76f8ddc01e94759a10cfa92b5d902ff2c13b1cd422634d169db5",
+            "approved_size_bytes": 8582733,
+            "tag": "tutorial",
+        },
+        "workbench.mp4": {
+            "approved_sha256": "322195e78955314537ab7000f78e3683bfe76aee47048cf4dc79aff2cb5a44de",
+            "approved_size_bytes": 45422842,
+            "tag": "tutorial",
         },
         "omnibioai_documentation_portal.mp4": {
             "approved_sha256": "57acee7fc9b9c32c0686fbaa03569e2ce901d133695011f8230f4d13fbbd567a",
             "approved_size_bytes": 1001108273,
             "tag": "documentation",
+        },
+        "lims.mp4": {
+            "approved_sha256": "ec615934df97e53df7f1a57227e4648c0e5ac8084f3f4b826d1d54915451a156",
+            "approved_size_bytes": 6688728,
+            "tag": "tutorial",
         },
     }
     assert {e["filename"] for e in public} == set(expected_public)
@@ -533,7 +563,7 @@ def test_repo_public_entries_carry_a_valid_content_approval():
         assert bp.SHA256_RE.fullmatch(entry["approved_sha256"])
         assert isinstance(entry["approved_size_bytes"], int) and entry["approved_size_bytes"] > 0
     unapproved = [e["filename"] for e in manifest if e.get("visibility") != "PUBLIC"]
-    assert len(unapproved) == 9 and all(e.get("visibility") == "REVIEW_REQUIRED" for e in manifest if e["filename"] in unapproved)
+    assert len(unapproved) == 8 and all(e.get("visibility") == "REVIEW_REQUIRED" for e in manifest if e["filename"] in unapproved)
 
 
 def test_real_manifest_builds_against_the_real_host_media_when_present(tmp_path):
