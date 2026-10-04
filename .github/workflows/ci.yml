@@ -73,7 +73,7 @@ jobs:
             ${{ steps.meta.outputs.labels }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.version=${{ github.ref_name }}
+            org.opencontainers.image.version=${{ github.sha }}
           sbom: true
           provenance: mode=max
           cache-from: type=gha
