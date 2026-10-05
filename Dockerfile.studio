@@ -1,3 +1,7 @@
+# OmniBioAI — Studio Video Tutorials
+# Purpose: Serve the Studio video library and its approved publication artifacts.
+# Author: Manish Kumar <manish@omnibioai.org>
+
 # Studio "Video Tutorials" image (videos:8086): nginx + the Studio build of the searchable
 # video library + the PUBLIC, hash-verified catalog + only the approved media files, each
 # re-verified after copying. It never copies content/, so REVIEW_REQUIRED / INTERNAL /

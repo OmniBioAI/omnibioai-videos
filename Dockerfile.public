@@ -1,3 +1,7 @@
+# OmniBioAI — Public Video Portal
+# Purpose: Serve the public portal with runtime verification of approved host-mounted media.
+# Author: Manish Kumar <manish@omnibioai.org>
+
 # Public video portal image: nginx + the static portal + the generated publication
 # metadata (approved hashes, catalog fragments, exact-match nginx locations) + the
 # runtime verifier. It contains NO video and NO content directory: approved media
@@ -14,10 +18,12 @@ FROM nginx:alpine
 RUN rm -rf /usr/share/nginx/html/* /etc/nginx/conf.d/default.conf
 COPY nginx.public.conf /etc/nginx/conf.d/default.conf
 COPY dist/public/www/ /usr/share/nginx/html/
+# Application source
 COPY dist/public/publication/ /etc/publication/
 COPY runtime/publish-runtime.sh /usr/local/bin/publish-runtime.sh
 
 EXPOSE 8087
 # The nginx base image sets STOPSIGNAL SIGQUIT; the publisher (PID 1) handles TERM/INT/QUIT and shuts nginx down gracefully.
 STOPSIGNAL SIGTERM
+# Entrypoint and default command
 ENTRYPOINT ["/usr/local/bin/publish-runtime.sh"]

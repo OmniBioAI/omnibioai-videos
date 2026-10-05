@@ -1,3 +1,7 @@
+# OmniBioAI — Video Portal
+# Purpose: Serve the video content directory through nginx.
+# Author: Manish Kumar <manish@omnibioai.org>
+
 FROM nginx:alpine
 
 COPY nginx.conf /etc/nginx/conf.d/default.conf
