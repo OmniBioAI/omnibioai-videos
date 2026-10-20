@@ -11,7 +11,7 @@ browser -> Cloudflare -> cloudflared -> 127.0.0.1:8087 -> omnibioai-videos-publi
                                                            `- /content  <- host content dir, READ-ONLY mount
 ```
 
-**The video files stay on the host** (`~/Desktop/machine/omnibioai-videos/content`). The image contains
+**The video files stay on the host** (`~/Desktop/omnibioai-ecosystem/omnibioai-videos/content`). The image contains
 nginx, the portal, and generated publication metadata -- no video, no `content/`, no `guide.html`.
 
 ## Publication control plane: `content/videos.json`
@@ -171,9 +171,9 @@ different-bytes in-place swap only at the next full re-hash (default 10 min).
 ## Deploy
 
 ```bash
-cd ~/Desktop/machine/omnibioai-videos
+cd ~/Desktop/omnibioai-ecosystem/omnibioai-videos
 SHA=<approved commit>
-HOSTCONTENT=$HOME/Desktop/machine/omnibioai-videos/content
+HOSTCONTENT=$HOME/Desktop/omnibioai-ecosystem/omnibioai-videos/content
 BUILD=$(mktemp -d)
 GIT_LFS_SKIP_SMUDGE=1 git archive "$SHA" | tar -x -C "$BUILD"    # code + reviewed manifest; no media bytes
 cd "$BUILD"

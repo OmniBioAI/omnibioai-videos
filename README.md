@@ -131,7 +131,7 @@ portal always requires a reviewed rebuild** for metadata or publication changes.
 
 ```bash
 cp my_analysis_demo.mp4 \
-   /home/manish/Desktop/machine/omnibioai-videos/content/
+   /home/manish/Desktop/omnibioai-ecosystem/omnibioai-videos/content/
 ```
 
 Supported formats: `.mp4` (recommended), `.webm`, `.mov`
@@ -146,7 +146,7 @@ Supported formats: `.mp4` (recommended), `.webm`, `.mov`
 ### Step 2 — Add entry to videos.json
 
 ```bash
-nano /home/manish/Desktop/machine/omnibioai-videos/content/videos.json
+nano /home/manish/Desktop/omnibioai-ecosystem/omnibioai-videos/content/videos.json
 ```
 
 Add a new JSON object to the array:
@@ -189,17 +189,17 @@ No rebuild needed. The player fetches `videos.json` on every page load.
 `guide.html` is a standalone file — edit it directly, no build step needed:
 
 ```bash
-nano /home/manish/Desktop/machine/omnibioai-videos/content/guide.html
+nano /home/manish/Desktop/omnibioai-ecosystem/omnibioai-videos/content/guide.html
 ```
 
 To redeploy after editing:
 
 ```bash
-cd /home/manish/Desktop/machine/omnibioai-videos
+cd /home/manish/Desktop/omnibioai-ecosystem/omnibioai-videos
 docker build -t ghcr.io/omnibioai/omnibioai-videos:latest .
 docker push ghcr.io/omnibioai/omnibioai-videos:latest
 
-cd /home/manish/Desktop/machine/omnibioai-studio
+cd /home/manish/Desktop/omnibioai-ecosystem/omnibioai-studio
 docker compose up -d --force-recreate videos
 ```
 
@@ -241,7 +241,7 @@ Key behaviours:
 ### Build locally
 
 ```bash
-cd /home/manish/Desktop/machine/omnibioai-videos
+cd /home/manish/Desktop/omnibioai-ecosystem/omnibioai-videos
 docker build -t ghcr.io/omnibioai/omnibioai-videos:latest .
 ```
 
@@ -279,7 +279,7 @@ videos:
 Start with the full stack:
 
 ```bash
-cd /home/manish/Desktop/machine/omnibioai-studio
+cd /home/manish/Desktop/omnibioai-ecosystem/omnibioai-studio
 docker compose up -d
 ```
 
