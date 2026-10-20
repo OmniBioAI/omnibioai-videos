@@ -1,0 +1,10 @@
+#!/bin/sh
+# obai-deploy pre-build hook for Dockerfile.public (opt-in: x-obai-prebuild in
+# omnibioai-studio's compose). obai-deploy runs it from the git-archived tree,
+# offline, with only that tree writable; the host content directory holding the
+# approved media arrives read-only as OBAI_INPUT_MEDIA_DIR (the archive's own
+# *.mp4 are Git LFS pointers). Produces dist/public, which Dockerfile.public copies.
+set -eu
+: "${OBAI_INPUT_MEDIA_DIR:?x-obai-prebuild must pass MEDIA_DIR (the host content directory)}"
+exec python3 -I scripts/build_public.py --content content --media-dir "$OBAI_INPUT_MEDIA_DIR" \
+    --portal portal --out dist/public

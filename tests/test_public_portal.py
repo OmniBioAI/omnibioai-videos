@@ -131,6 +131,19 @@ def portal_dir():
     return ROOT / "portal"
 
 
+def test_obai_prebuild_hook_builds_dist_public_from_the_archived_tree(content_dir, tmp_path):
+    """The obai-deploy hook needs only the archived tree plus the read-only media input."""
+    tree = tmp_path / "archive"
+    for name in ("scripts", "portal"):
+        shutil.copytree(ROOT / name, tree / name)
+    shutil.copytree(content_dir, tree / "content")
+    hook = ["sh", "scripts/obai-prebuild"]
+    env = {"PATH": os.environ["PATH"], "OBAI_INPUT_MEDIA_DIR": str(content_dir)}
+    subprocess.run(hook, cwd=tree, env=env, check=True, capture_output=True)
+    assert (tree / "dist/public/www/index.html").is_file() and (tree / "dist/public/publication/approved.tsv").is_file()
+    missing = subprocess.run(hook, cwd=tree, env={"PATH": os.environ["PATH"]}, capture_output=True, text=True)
+    assert missing.returncode != 0 and "MEDIA_DIR" in missing.stderr
+
 def _walk_bytes(root):
     return {p.relative_to(root).as_posix(): p.read_bytes() for p in root.rglob("*") if p.is_file()}
 
