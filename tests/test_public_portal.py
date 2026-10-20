@@ -641,7 +641,7 @@ def test_public_nginx_conf_is_strict_and_has_no_generic_media_alias():
     assert "include /run/publication/media.conf;" in code and "alias /run/publication/videos.json;" in code
     assert "location ^~ /videos/ {\n        return 404;\n    }" in code  # unknown /videos/* -> 404
     assert code.rstrip().endswith("location / {\n        return 404;\n    }\n}")
-    assert "default-src 'none'" in code and "frame-ancestors 'none'" in code
+    assert "default-src 'none'" in code and "frame-ancestors 'self' https://webstudio.omnibioai.org\"" in code
 
 
 def test_public_dockerfile_packages_no_media_and_no_content():
@@ -1085,9 +1085,9 @@ def test_no_admin_or_backend_surface_exists(site, path):
 def test_security_headers_on_every_response(site, path):
     _, headers, _ = site.request("GET", path, {"Range": "bytes=0-9"} if path.endswith(".mp4") else None)
     assert "default-src 'none'" in headers["content-security-policy"]
-    assert "frame-ancestors 'none'" in headers["content-security-policy"]
+    assert headers["content-security-policy"].endswith("frame-ancestors 'self' https://webstudio.omnibioai.org")
     assert headers["x-content-type-options"] == "nosniff"
-    assert headers["x-frame-options"] == "DENY"
+    assert headers["x-frame-options"] == "SAMEORIGIN"
     assert headers["referrer-policy"] == "no-referrer"
     assert headers["cross-origin-resource-policy"] == "same-origin"
     assert "access-control-allow-origin" not in headers

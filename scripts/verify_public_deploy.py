@@ -177,7 +177,7 @@ def check_site(base_url: str, manifest_path: Path, media_dir: Path) -> list[Resu
     for path in ("/", "/videos.json", "/nope"):
         _, headers, _ = client.request("GET", path)
         good = ("default-src 'none'" in headers.get("content-security-policy", "")
-                and headers.get("x-content-type-options") == "nosniff" and headers.get("x-frame-options") == "DENY"
+                and headers.get("x-content-type-options") == "nosniff" and headers.get("x-frame-options") == "SAMEORIGIN"
                 and headers.get("referrer-policy") == "no-referrer" and "access-control-allow-origin" not in headers
                 and "set-cookie" not in headers and "x-powered-by" not in headers)
         rec(f"security headers on {path}", good, headers.get("content-security-policy", "")[:40])
