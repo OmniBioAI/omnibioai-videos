@@ -22,12 +22,14 @@ import http.server
 import importlib.util
 import json
 import os
+import re
 import shutil
 import struct
 import subprocess
 import sys
 import threading
 import time
+import urllib.parse
 import uuid
 from pathlib import Path
 
@@ -596,7 +598,9 @@ def test_portal_is_read_only_and_credential_free():
         "WebSocket", "sendBeacon", "method:", "'POST'", '"POST"', "upload", "delete", "admin",
     ):
         assert forbidden not in js, forbidden
-    assert js.count("fetch(") == 1 and "fetch('/videos.json'" in js
+    assert js.count("fetch(") == 1 and "fetch('videos.json'" in js
+    # Document-relative only, so the page also works under Studio's /_svc/videos/ prefix.
+    assert "url: 'videos/' + encodeURIComponent(v.filename)" in js and "'/videos" not in js
     assert "credentials: 'omit'" in js
     for source in (html, js, css):
         assert "http://" not in source and "https://" not in source
@@ -606,7 +610,8 @@ def test_portal_is_read_only_and_credential_free():
     assert ".tag-documentation" in css
     # nothing that a strict CSP (no unsafe-inline) would block or that hides behaviour in markup
     assert "onclick=" not in html and " style=" not in html
-    assert html.count("<script") == 1 and 'src="/portal.js"' in html
+    assert html.count("<script") == 1 and 'src="portal.js"' in html
+    assert not re.findall(r'(?:src|href)="/(?!studio")', html)  # only the Back to Studio link is absolute
     assert '<link rel="icon" href="data:,">' in html  # no /favicon.ico request -> no 404 noise in the console
 
 
@@ -986,12 +991,69 @@ def test_image_contains_no_video_content_directory_or_restricted_files(built):
 def test_anonymous_user_can_load_the_public_portal(site):
     status, headers, body = site.get("/")
     assert status == 200 and headers["content-type"].startswith("text/html")
-    assert b"<title>OmniBioAI" in body and b'src="/portal.js"' in body
+    assert b"<title>OmniBioAI" in body and b'src="portal.js"' in body
     assert site.get("/index.html")[0] == 200
     assert site.get("/portal.css")[0] == 200
     assert site.get("/portal.js")[0] == 200
     assert "set-cookie" not in headers
 
+
+class _PrefixProxy(http.server.BaseHTTPRequestHandler):
+    """Studio's nginx-router in miniature: strip /_svc/videos and forward to the portal."""
+
+    prefix = "/_svc/videos"
+
+    def do_GET(self):
+        if not self.path.startswith(self.prefix + "/"):
+            self.server.seen.append((self.path, 404))
+            self.send_error(404)
+            return
+        upstream = self.path[len(self.prefix):]
+        fwd = {k: v for k, v in self.headers.items() if k.lower() == "range"}
+        status, headers, body = self.server.site.get(upstream, fwd)
+        self.server.seen.append((self.path, status))
+        self.send_response(status)
+        for key in ("content-type", "content-range", "accept-ranges"):
+            if key in headers:
+                self.send_header(key, headers[key])
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *args):
+        pass
+
+
+@pytest.mark.docker
+def test_portal_loads_under_the_studio_prefix_without_any_404(site):
+    """Every URL the page resolves from /_svc/videos/ (assets, catalog, media) stays under the prefix and loads."""
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _PrefixProxy)
+    server.site, server.seen = site, []
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    proxy = Site(server.server_address[1])
+    base = "http://studio.test/_svc/videos/"
+    try:
+        status, _, body = proxy.get("/_svc/videos/")
+        assert status == 200
+        html = body.decode()
+        js = proxy.get("/_svc/videos/portal.js")[2].decode()
+        # Resolve exactly as the browser does: markup URLs, the catalog fetch and the media URL builder.
+        refs = [u for u in re.findall(r'(?:src|href)="([^"]+)"', html) if not u.startswith(("data:", "http"))]
+        refs += re.findall(r"fetch\('([^']+)'", js)
+        media = re.findall(r"url: '([^']+)' \+ encodeURIComponent", js)
+        assert refs and len(media) == 1
+        catalog = json.loads(proxy.get(urllib.parse.urlparse(urllib.parse.urljoin(base, "videos.json")).path)[2])
+        refs += [media[0] + urllib.parse.quote(v["filename"]) for v in catalog]
+        assert catalog
+        for ref in refs:
+            path = urllib.parse.urlparse(urllib.parse.urljoin(base, ref)).path
+            headers = {"Range": "bytes=0-9"} if path.endswith(".mp4") else None
+            assert proxy.get(path, headers)[0] in (200, 206), ref
+    finally:
+        server.shutdown()
+    missing = [path for path, status in server.seen if status == 404]
+    assert not missing, missing
+    assert all(path.startswith("/_svc/videos/") for path, _ in server.seen)
 
 @pytest.mark.docker
 def test_catalog_lists_exactly_the_public_record(site):

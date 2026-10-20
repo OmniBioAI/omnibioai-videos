@@ -126,7 +126,7 @@ def test_studio_portal_is_the_public_source_with_only_relative_urls_and_no_secon
     assert (www / "portal.css").read_bytes() == (ROOT / "portal" / "portal.css").read_bytes()
     for name in ("index.html", "portal.js"):  # the declared rewrites are the only differences
         expected = (ROOT / "portal" / name).read_text()
-        for old, new in bp.STUDIO_REWRITES[name]:
+        for old, new in bp.STUDIO_REWRITES.get(name, ()):
             expected = expected.replace(old, new)
         assert (www / name).read_text() == expected
     html, js = (www / "index.html").read_text(), (www / "portal.js").read_text()
