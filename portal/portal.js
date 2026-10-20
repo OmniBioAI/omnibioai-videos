@@ -117,7 +117,7 @@
         order: typeof v.order === 'number' && isFinite(v.order) ? v.order : 999,
         thumbnail: typeof v.thumbnail === 'string' && THUMBNAIL_RE.test(v.thumbnail) ? v.thumbnail : '',
         duration: formatDuration(v.duration),
-        url: '/videos/' + encodeURIComponent(v.filename)
+        url: 'videos/' + encodeURIComponent(v.filename)
       };
       video.index = [video.title, video.desc, category, tag].concat(terms).map(compact).join(' ');
       out.push(video);
@@ -365,7 +365,7 @@
   }
 
   function load() {
-    fetch('/videos.json', { credentials: 'omit', cache: 'no-cache' })
+    fetch('videos.json', { credentials: 'omit', cache: 'no-cache' })
       .then(function (res) {
         if (!res.ok) throw new Error('catalog unavailable');
         return res.json();

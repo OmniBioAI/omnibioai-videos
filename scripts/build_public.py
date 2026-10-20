@@ -122,19 +122,14 @@ FORBIDDEN_PATTERNS = {
 
 # Studio variant: where the image keeps approved media, and the exact, count-checked
 # rewrites that turn the public portal into the Studio-embedded build. Each ``old``
-# must occur exactly once in the portal source or the build fails, so a portal edit
-# can never silently leave an absolute URL (which would escape /_svc/videos/) behind.
+# must occur exactly once in the portal source or the build fails. Asset, catalog and
+# media URLs need no rewrite: the portal source is document-relative so the same build
+# works at / and under /_svc/videos/ (tests reject any root-absolute URL).
 STUDIO_MEDIA_ROOT = "/usr/share/nginx/media"
 STUDIO_REWRITES = {
     "index.html": (
-        ('<link rel="stylesheet" href="/portal.css">', '<link rel="stylesheet" href="portal.css">'),
-        ('<script src="/portal.js"></script>', '<script src="portal.js"></script>'),
         ('  <a class="back-to-studio" href="/studio" data-studio-link>← Back to Studio</a>\n', ""),
         ("<span>omnibioai</span>", "<span>studio</span>"),
-    ),
-    "portal.js": (
-        ("fetch('/videos.json',", "fetch('videos.json',"),
-        ("url: '/videos/' + encodeURIComponent(v.filename)", "url: 'videos/' + encodeURIComponent(v.filename)"),
     ),
 }
 
