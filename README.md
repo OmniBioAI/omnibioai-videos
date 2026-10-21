@@ -5,8 +5,9 @@ Video library and Getting Started guide service for the OmniBioAI Studio platfor
 Serves tutorial videos, workflow demonstrations, and the interactive Getting Started guide — all via a single nginx container with zero backend dependencies.
 
 The **public Video Tutorials library** lives in `portal/` and is built separately from the
-internal player in `content/index.html`. It provides instant search, keyboard autocomplete,
-metadata-driven category chips, optional Featured placement, and a responsive video grid.
+internal player in `content/index.html`. It is a YouTube-style library: a featured hero, a
+responsive thumbnail grid, instant search with keyboard autocomplete, metadata-driven category
+chips, and a dedicated watch page (player, details, topics, Up next) addressable as `?v=<file>`.
 Search covers titles, descriptions, categories, tags, keywords, services, modules, and workflows;
 `RNA-seq`, `rnaseq`, and `RNA seq` are equivalent discovery terms. Filters can be bookmarked
 with `?q=rnaseq&category=workflows`. The `← Back to Studio` link targets the canonical
@@ -30,6 +31,10 @@ INTERNAL and unregistered videos, their metadata and `guide.html` are not in the
 python scripts/build_public.py --variant studio --content content --out dist/studio
 docker build -f Dockerfile.studio -t ghcr.io/omnibioai/omnibioai-videos:latest .
 ```
+
+The build verifies every PUBLIC file's size and SHA-256 and fails on a Git LFS pointer, so it
+needs the real media bytes. In a checkout without them, point `--media-dir` at the directory
+that holds the approved files (the manifest still comes from `--content`).
 
 The image bakes in only the approved media (copied and re-verified against the approved SHA-256),
 serves it at `/videos/<file>` and at the legacy `/<file>` URL, and answers 404 for everything

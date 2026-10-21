@@ -60,7 +60,7 @@ clearing search keeps the selected category, and **All** resets the category.
 
 Autocomplete shows up to eight distinct video, keyword, and category suggestions from eligible
 metadata within the selected category. Use ↑/↓ and Enter or click a suggestion. Video suggestions
-open the player; keywords refine the search; category suggestions select that category and clear
+open the watch page; keywords refine the search; category suggestions select that category and clear
 the query. Escape, Tab, or clicking outside closes the list. The combobox/listbox announces its
 selection, result counts are announced politely, and cards/chips support keyboard access.
 
@@ -117,8 +117,20 @@ on an approved record is public-facing copy and must be reviewed before rebuildi
 Chips and sections appear only for populated categories. Preferred order is Getting Started,
 Platform, Workflows, AI & RAG, Bioinformatics, Security, Administration, Documentation, followed
 by legacy tag categories and then other category names alphabetically. Videos retain ascending
-`order`, then filename as the tie-breaker. Featured videos appear once in the unfiltered library
-and still participate in category/search results. No dates or “recently added” status are inferred.
+`order`, then filename as the tie-breaker. Featured videos appear once in the Featured section of
+the unfiltered library and still participate in category/search results. The unfiltered library
+also opens with a hero for the first featured video (or, when none is featured, the first video
+in order); searching or selecting a category hides it. No dates or “recently added” status are inferred.
+
+Opening a card, the hero, or a video suggestion shows the watch page instead of the library: the
+player, title, category and duration, description, topic chips (each searches the library), and an
+Up next list (same category first, then catalog order, at most 12). The page is addressable as
+`?v=<filename>` alongside `q` and `category`; only a filename present in the eligible catalog is
+honoured. Opening a video adds one history entry, so the browser's Back button, **← All videos**
+and Escape all return to the library and restore focus; Up next replaces the entry instead of
+stacking one per video. Playback starts on the user's own click or key press; a bookmarked link
+waits for Play. Leaving the page removes the player's source so no further range requests are
+made. A file that fails to load shows a plain message instead of a broken player.
 
 The grid supports five columns on wide desktops, four on normal desktops, two to three on
 tablets, and one on narrow phones. Chips scroll horizontally. Cards retain 16:9 thumbnails,

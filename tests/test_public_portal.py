@@ -1587,8 +1587,8 @@ def test_browser_grid_filters_search_counts_and_keyboard_open(tmp_path, serve_bu
         first = page.locator(".video-card").first
         first.focus()
         page.keyboard.press("Enter")
-        modal_open = page.locator("#modal.open").is_visible()
-        modal_src = page.locator("#modalVideo").evaluate("node => node.getAttribute('src')")
+        watch_open = page.locator("#watch").is_visible()
+        watch_src = page.locator("#player").evaluate("node => node.getAttribute('src')")
         return {
             "combinedCount": combined_count,
             "combinedText": combined_text,
@@ -1596,8 +1596,8 @@ def test_browser_grid_filters_search_counts_and_keyboard_open(tmp_path, serve_bu
             "workflowCount": workflow_count,
             "allCount": all_count,
             "searchCount": search_count,
-            "modalOpen": modal_open,
-            "modalSrc": modal_src,
+            "watchOpen": watch_open,
+            "watchSrc": watch_src,
             "bodyWidth": page.evaluate("document.documentElement.scrollWidth"),
             "viewportWidth": page.evaluate("window.innerWidth"),
         }
@@ -1608,8 +1608,8 @@ def test_browser_grid_filters_search_counts_and_keyboard_open(tmp_path, serve_bu
     assert result["combinedCount"] == 1 and "03 RNA-seq Workflow Demo" in result["combinedText"]
     assert result["videoCount"] == "1 video"
     assert result["searchCount"] == 1
-    assert result["modalOpen"] is True
-    assert result["modalSrc"] == "/videos/intro_getting_started.mp4"
+    assert result["watchOpen"] is True
+    assert result["watchSrc"] == "videos/intro_getting_started.mp4"
     assert result["bodyWidth"] <= result["viewportWidth"] + 1
     assert result["errors"] == []
 

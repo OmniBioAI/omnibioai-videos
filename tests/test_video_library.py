@@ -187,11 +187,12 @@ def test_autocomplete_keyboard_enter_escape_outside_and_focus(library):
     expect(page.get_by_role("option").nth(1)).to_have_attribute("aria-selected", "true")
     search.press("ArrowUp")
     search.press("Enter")
-    expect(page.get_by_role("dialog")).to_be_visible()
-    expect(page.locator("#modalTitle")).to_have_text("Running an RNA-seq Workflow")
-    expect(page.locator("#modalVideo")).to_have_attribute("src", "/videos/rna.mp4")
-    expect(page.get_by_role("button", name="Close", exact=True)).to_be_focused()
+    expect(page.get_by_role("region", name="Running an RNA-seq Workflow")).to_be_visible()
+    expect(page.locator("#watchTitle")).to_have_text("Running an RNA-seq Workflow")
+    expect(page.locator("#player")).to_have_attribute("src", "videos/rna.mp4")
+    expect(page.locator("#watchTitle")).to_be_focused()
     page.keyboard.press("Escape")
+    expect(page.locator("#watch")).to_be_hidden()
     expect(search).to_be_focused()
     search.fill("rna")
     search.press("Escape")
@@ -221,7 +222,7 @@ def test_autocomplete_click_terms_categories_and_category_scope(library):
     search.fill("transcriptomics")
     assert "Knowledge Search" not in page.get_by_role("listbox").inner_text()
     page.get_by_role("option", name="Video Running an RNA-seq Workflow", exact=True).click()
-    expect(page.get_by_role("dialog")).to_be_visible()
+    expect(page.get_by_role("region", name="Running an RNA-seq Workflow")).to_be_visible()
 
 
 def test_url_state_bookmarks_and_history(library):
@@ -349,3 +350,115 @@ def test_new_public_fields_are_secret_scanned(content_dir, tmp_path, field, secr
     _write_manifest(content_dir, [_entry("pub.mp4", "PUBLIC", **{field: value})])
     with pytest.raises(bp.PublishError, match="forbidden content"):
         bp.build(content_dir, ROOT / "portal", tmp_path / "out")
+
+
+# ── YouTube-style home and watch view ───────────────────────────────────────
+
+
+def test_home_shows_a_featured_hero_only_while_browsing(library):
+    page = library()
+    hero = page.get_by_role("region", name="Getting Started")
+    expect(hero).to_be_visible()
+    expect(hero.locator(".hero-eyebrow")).to_have_text("Featured")
+    expect(hero.locator(".hero-meta")).to_have_text("Getting Started · 2:05 · OmniBioAI Platform")
+    expect(page.locator(".video-card .card-channel").first).to_have_text("OmniBioAI")
+    page.get_by_role("combobox").fill("rna")
+    expect(page.locator(".hero")).to_have_count(0)  # search results are not a home page
+    page.get_by_role("button", name="Clear search").click()
+    page.get_by_role("button", name="Workflows", exact=True).click()
+    expect(page.locator(".hero")).to_have_count(0)
+    page.get_by_role("button", name="All", exact=True).click()
+    page.get_by_role("button", name="Watch now").click()
+    expect(page.locator("#watchTitle")).to_have_text("Getting Started")
+    assert page.url.endswith("?v=start.mp4")
+
+
+def test_hero_falls_back_to_the_first_video_when_none_is_featured(library):
+    catalog = [dict(r, featured=False) for r in records()]
+    page = library(catalog)
+    expect(page.locator(".hero-title")).to_have_text("Getting Started")
+    assert "Featured" not in page.locator(".library-section h2").all_text_contents()
+
+
+def test_watch_view_deep_link_up_next_and_history(library):
+    page = library(query="?v=rna.mp4")
+    watch = page.get_by_role("region", name="Running an RNA-seq Workflow")
+    expect(watch).to_be_visible()
+    expect(page.locator("#library")).to_be_hidden()
+    expect(page.locator("#player")).to_have_attribute("src", "videos/rna.mp4")
+    assert page.locator("#player").evaluate("v => v.paused")  # a bookmarked link never autoplays
+    # The fixtures serve no media, so the player reports the failure instead of a broken control bar.
+    expect(page.locator("#playerError")).to_have_text("This video could not be loaded. Please try again later.")
+    expect(page.locator("#player")).to_be_hidden()
+    expect(page.locator("#watchMeta")).to_have_text("Workflows · 12:34 · OmniBioAI Platform")
+    expect(page.locator("#watchDesc")).to_have_text("Compare differential expression from FASTQ")
+    assert page.locator(".term-chip").all_text_contents() == [
+        "#transcriptomics", "#RNA-seq", "#gene counts", "#Nextflow", "#Workflow Runner", "#nf-core RNA-seq"]
+    assert page.title() == "Running an RNA-seq Workflow · OmniBioAI Videos"
+    assert page.locator(".up-next-title").all_text_contents() == [
+        "Getting Started", "Knowledge Search", "Documentation Portal"]
+    depth = page.evaluate("history.length")
+    page.get_by_role("button", name="Play next: Knowledge Search").click()
+    expect(page.locator("#watchTitle")).to_have_text("Knowledge Search")
+    expect(page.locator("#player")).to_have_attribute("src", "videos/rag.mp4")
+    assert page.url.endswith("?v=rag.mp4") and page.evaluate("history.length") == depth  # replaced, not pushed
+    page.get_by_role("button", name="← All videos").click()
+    expect(page.locator("#watch")).to_be_hidden()
+    expect(page.locator("#library")).to_be_visible()
+    assert page.url.endswith("/") and page.title() == "OmniBioAI · Video Tutorials"
+    assert page.locator("#player").get_attribute("src") is None  # stream stopped
+
+
+def test_watch_view_back_and_forward_buttons(library):
+    page = library(query="?category=workflows")
+    page.get_by_role("button", name="Play Running an RNA-seq Workflow").click()
+    expect(page.locator("#watch")).to_be_visible()
+    assert "v=rna.mp4" in page.url and "category=workflows" in page.url
+    page.go_back()
+    expect(page.locator("#watch")).to_be_hidden()
+    expect(page.get_by_role("button", name="Play Running an RNA-seq Workflow")).to_be_focused()
+    assert page.url.endswith("?category=workflows")
+    page.go_forward()
+    expect(page.locator("#watchTitle")).to_have_text("Running an RNA-seq Workflow")
+    page.keyboard.press("Escape")
+    expect(page.locator("#watch")).to_be_hidden()
+
+
+def test_watch_view_topics_search_and_unknown_links(library):
+    page = library(query="?v=rna.mp4")
+    page.get_by_role("button", name="Search videos about transcriptomics").click()
+    expect(page.locator("#watch")).to_be_hidden()
+    expect(page.get_by_role("combobox")).to_have_value("transcriptomics")
+    assert titles(page) == ["Running an RNA-seq Workflow", "Knowledge Search"]
+    assert "v=" not in page.url
+    for query in ("?v=unknown.mp4", "?v=../videos.json", "?v="):
+        page = library(query=query)
+        expect(page.locator("#watch")).to_be_hidden()
+        expect(page.locator(".video-card")).to_have_count(4)
+
+
+def test_typing_while_watching_returns_to_results(library):
+    page = library(query="?v=rag.mp4")
+    page.get_by_role("combobox").fill("documentation")
+    expect(page.locator("#watch")).to_be_hidden()
+    assert titles(page) == ["Documentation Portal"]
+    assert page.url.endswith("?q=documentation")
+
+
+@pytest.mark.parametrize("width,beside", [(1440, True), (1024, False), (768, False), (390, False), (320, False)])
+def test_watch_view_layout_is_responsive(library, width, beside):
+    page = library(query="?v=rna.mp4", width=width, height=860)
+    expect(page.locator("#watch")).to_be_visible()
+    shape = page.evaluate("""() => {
+      const main = document.querySelector('.watch-main').getBoundingClientRect();
+      const aside = document.querySelector('.watch-aside').getBoundingClientRect();
+      const player = document.querySelector('.player-frame').getBoundingClientRect();
+      return {overflow: document.documentElement.scrollWidth > innerWidth,
+        beside: aside.left >= main.right - 1 && aside.top < main.bottom,
+        ratio: player.width / player.height, playerWidth: player.width};
+    }""")
+    assert not shape["overflow"]
+    assert shape["beside"] is beside
+    assert abs(shape["ratio"] - 16 / 9) < 0.05
+    if width <= 640:
+        assert shape["playerWidth"] == width  # edge-to-edge on phones
