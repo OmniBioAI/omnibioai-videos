@@ -340,19 +340,21 @@ def test_studio_autocomplete_keyboard_and_video_opening(studio):
     search.press("ArrowDown")
     expect(page.locator("#suggestion-0")).to_have_attribute("aria-selected", "true")
     expect(search).to_have_attribute("aria-activedescendant", "suggestion-0")
-    search.press("Enter")  # a video suggestion opens the player
-    expect(page.locator("#modal")).to_have_class(re.compile(r"\bopen\b"))
-    expect(page.locator("#modalClose")).to_be_focused()
-    src = page.locator("#modalVideo").evaluate("v => v.src")
+    search.press("Enter")  # a video suggestion opens the watch view
+    expect(page.locator("#watch")).to_be_visible()
+    expect(page.locator("#watchTitle")).to_be_focused()
+    src = page.locator("#player").evaluate("v => v.src")
     assert src == studio.base + PREFIX + "videos/rna.mp4"
+    assert "v=rna.mp4" in page.url and page.url.startswith(studio.base + PREFIX)
     page.keyboard.press("Escape")
-    expect(page.locator("#modal")).not_to_have_class(re.compile(r"\bopen\b"))
+    expect(page.locator("#watch")).to_be_hidden()
     search.fill("")
     card = page.get_by_role("button", name="Play Knowledge Search")
     card.focus()
     card.press("Enter")
-    assert page.locator("#modalVideo").evaluate("v => v.src") == studio.base + PREFIX + "videos/rag.mp4"
-    expect(page.locator("#modalMeta")).to_have_text("AI & RAG · 1:01:01 · OmniBioAI Platform")
+    expect(page.locator("#watch")).to_be_visible()
+    assert page.locator("#player").evaluate("v => v.src") == studio.base + PREFIX + "videos/rag.mp4"
+    expect(page.locator("#watchMeta")).to_have_text("AI & RAG · 1:01:01 · OmniBioAI Platform")
 
 
 def test_studio_malformed_optional_metadata_is_dropped_safely(studio):
@@ -486,6 +488,6 @@ def test_studio_image_library_works_in_a_browser_under_its_csp(studio_stack, bro
     expect(page.locator("#videoCount")).to_have_text("1 video")
     assert titles(page) == ["Running an RNA-seq Workflow"]
     page.get_by_role("button", name="Play Running an RNA-seq Workflow").click()
-    assert page.locator("#modalVideo").evaluate("v => v.src") == base + PREFIX + "videos/rna.mp4"
+    assert page.locator("#player").evaluate("v => v.src") == base + PREFIX + "videos/rna.mp4"
     page.close()
     assert problems == []

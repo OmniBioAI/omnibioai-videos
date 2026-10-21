@@ -4,47 +4,43 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="dark">
 <title>OmniBioAI · Video Tutorials</title>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="portal.css">
 </head>
 <body>
 
-<div class="topbar">
+<header class="topbar">
   <a class="back-to-studio" href="/studio" data-studio-link>← Back to Studio</a>
-  <div class="topbar-path">
+  <div class="brand">
+    <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+      <defs>
+        <linearGradient id="brandGradient" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#00e5a0"/>
+          <stop offset="1" stop-color="#0094ff"/>
+        </linearGradient>
+      </defs>
+      <rect width="32" height="32" rx="8" fill="url(#brandGradient)"/>
+      <path d="M13 10.5v11l9-5.5z" fill="#0b0f14"/>
+    </svg>
+    <span class="brand-name">OmniBioAI <span class="brand-product">Videos</span></span>
+  </div>
+  <div class="topbar-path" aria-label="Location">
     <span>omnibioai</span>
     <span class="sep">/</span>
     <span class="current">videos</span>
   </div>
   <div class="topbar-badges">
-    <span class="pill pill-green" id="statusPill">● LOADING</span>
+    <span class="pill pill-green" id="statusPill" role="status">● LOADING</span>
     <span class="pill pill-orange">BETA</span>
   </div>
-</div>
+</header>
 
-<div class="modal-overlay" id="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-  <div class="modal">
-    <video class="modal-video" id="modalVideo" controls></video>
-    <div class="modal-footer">
-      <div>
-        <div class="modal-title" id="modalTitle">—</div>
-        <div class="modal-meta" id="modalMeta">—</div>
-      </div>
-      <button class="modal-close" id="modalClose" type="button" aria-label="Close">✕</button>
-    </div>
-  </div>
-</div>
-
-<main class="page">
-  <div class="page-heading">
-    <div class="heading-row"><h1>Video Tutorials</h1><span class="video-count" id="videoCount"></span></div>
-    <p>Platform walkthroughs, tutorials and workflow demonstrations</p>
-  </div>
-
+<main class="page" id="main">
   <div class="controls" id="controls">
     <div class="search-wrap">
-      <span class="search-icon" aria-hidden="true">⌕</span>
+      <span class="search-icon" aria-hidden="true"></span>
       <input type="text" id="searchInput" placeholder="Search OmniBioAI videos..." autocomplete="off"
         aria-label="Search OmniBioAI videos" role="combobox" aria-autocomplete="list"
         aria-controls="suggestions" aria-expanded="false">
@@ -53,14 +49,47 @@
     </div>
     <div id="categoryFilters" class="category-filters" role="group" aria-label="Video categories"></div>
   </div>
-  <p id="resultStatus" class="result-status" role="status" aria-live="polite" aria-atomic="true"></p>
 
-  <div id="content">
-    <div class="state-box">
-      <div class="spinner"></div>
-      <p>Loading videos...</p>
+  <div id="library">
+    <div class="page-heading">
+      <div class="heading-row"><h1>Video Tutorials</h1><span class="video-count" id="videoCount"></span></div>
+      <p>Platform walkthroughs, tutorials and workflow demonstrations</p>
+    </div>
+    <p id="resultStatus" class="result-status" role="status" aria-live="polite" aria-atomic="true"></p>
+
+    <div id="content">
+      <div class="state-box">
+        <div class="spinner"></div>
+        <p>Loading videos...</p>
+      </div>
     </div>
   </div>
+
+  <section id="watch" class="watch" aria-labelledby="watchTitle" hidden>
+    <div class="watch-main">
+      <button id="watchBack" class="watch-back" type="button">← All videos</button>
+      <div class="player-frame">
+        <video id="player" class="player" controls playsinline preload="metadata"></video>
+        <p id="playerError" class="player-error" role="alert" hidden>This video could not be loaded. Please try again later.</p>
+      </div>
+      <h2 id="watchTitle" class="watch-title" tabindex="-1">—</h2>
+      <div class="watch-channel">
+        <span class="channel-avatar" aria-hidden="true">OB</span>
+        <div>
+          <div class="channel-name">OmniBioAI</div>
+          <div class="watch-meta" id="watchMeta">—</div>
+        </div>
+      </div>
+      <div class="watch-description">
+        <p id="watchDesc"></p>
+        <ul id="watchTerms" class="watch-terms" aria-label="Topics"></ul>
+      </div>
+    </div>
+    <aside class="watch-aside" aria-labelledby="upNextHeading">
+      <h2 id="upNextHeading" class="up-next-heading">Up next</h2>
+      <div id="upNext" class="up-next"></div>
+    </aside>
+  </section>
 </main>
 
 <script src="portal.js"></script>
