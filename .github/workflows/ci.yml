@@ -47,6 +47,8 @@ jobs:
       attestations: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Docker metadata
         id: meta
@@ -103,3 +105,10 @@ jobs:
           echo "$manifest"
           echo "$manifest" | grep -q 'Platform:    linux/amd64'
           echo "$manifest" | grep -q 'Platform:    linux/arm64'
+
+      - name: Queue newly public video notifications for central approval
+        env:
+          DISCORD_EVENT_ROUTER_URL: ${{ vars.DISCORD_EVENT_ROUTER_URL }}
+          DISCORD_EVENT_SOURCE_SECRET: ${{ secrets.DISCORD_EVENT_VIDEO_SECRET }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: python scripts/publish_discord_video_event.py
