@@ -3,10 +3,47 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="referrer" content="no-referrer">
-<meta name="color-scheme" content="dark">
+<meta name="referrer" content="strict-origin">
+<meta name="color-scheme" content="light dark">
+<meta name="omnibioai-studio-dev-origin" content="">
 <title>OmniBioAI · Video Tutorials</title>
+<script>
+(() => {
+  const root = document.documentElement;
+  const params = new URLSearchParams(window.location.search);
+  const themes = ['light', 'dark'];
+  const accents = ['teal', 'blue', 'purple', 'orange'];
+  const densities = ['comfortable', 'compact'];
+  const motions = ['system', 'reduce'];
+  const systemTheme = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  const choose = (name, choices, fallback) => choices.includes(params.get(`obai_${name}`)) ? params.get(`obai_${name}`) : fallback;
+
+  root.dataset.theme = choose('theme', themes, systemTheme);
+  root.dataset.accent = choose('accent', accents, 'teal');
+  root.dataset.density = choose('density', densities, 'comfortable');
+  root.dataset.motion = choose('motion', motions, 'system');
+  root.dataset.embedded = window.parent !== window ? 'true' : 'false';
+
+  const privateKeys = new Set([
+    'token', 'access_token', 'refresh_token', 'id_token', 'password', 'api_key', 'api-key',
+    'session', 'session_id', 'secret', 'client_secret', 'credential', 'authorization', 'auth',
+    'user_id', 'email', 'organization', 'organization_id', 'account', 'account_id',
+  ]);
+  let changed = false;
+  for (const key of Array.from(params.keys())) {
+    if (key.toLowerCase().startsWith('obai_') || privateKeys.has(key.toLowerCase())) {
+      params.delete(key);
+      changed = true;
+    }
+  }
+  if (changed) {
+    const query = params.toString();
+    window.history.replaceState(window.history.state, '', window.location.pathname + (query ? `?${query}` : '') + window.location.hash);
+  }
+})();
+</script>
 <link rel="icon" href="data:,">
+<link rel="stylesheet" href="omnibioai-design-tokens.css">
 <link rel="stylesheet" href="portal.css">
 </head>
 <body>
@@ -17,12 +54,12 @@
     <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
       <defs>
         <linearGradient id="brandGradient" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stop-color="#00e5a0"/>
-          <stop offset="1" stop-color="#0094ff"/>
+          <stop offset="0" stop-color="var(--color-accent)"/>
+          <stop offset="1" stop-color="var(--color-info)"/>
         </linearGradient>
       </defs>
       <rect width="32" height="32" rx="8" fill="url(#brandGradient)"/>
-      <path d="M13 10.5v11l9-5.5z" fill="#0b0f14"/>
+      <path d="M13 10.5v11l9-5.5z" fill="var(--color-on-accent)"/>
     </svg>
     <span class="brand-name">OmniBioAI <span class="brand-product">Videos</span></span>
   </div>
@@ -92,6 +129,7 @@
   </section>
 </main>
 
+<script src="embed-appearance.js"></script>
 <script src="portal.js"></script>
 </body>
 </html>

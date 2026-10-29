@@ -1,0 +1,9 @@
+{
+  "name": "@omnibioai/design-tokens",
+  "version": "1.1.0",
+  "description": "OmniBioAI unified design tokens",
+  "main": "tokens.js",
+  "types": "tokens.ts",
+  "files": ["tokens.css", "tokens.js", "tokens.ts"],
+  "license": "MIT"
+}

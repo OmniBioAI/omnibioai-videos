@@ -97,7 +97,7 @@ STUDIO_HOST_RE = re.compile(
 )
 
 # Static portal files copied verbatim into the web root (allowlist).
-PORTAL_FILES = ("index.html", "portal.css", "portal.js")
+PORTAL_FILES = ("index.html", "omnibioai-design-tokens.css", "portal.css", "embed-appearance.js", "portal.js")
 
 # Text that must never appear in anything we publish. Deliberately broad:
 # a false positive stops the build, a false negative publishes a secret.
@@ -128,7 +128,6 @@ FORBIDDEN_PATTERNS = {
 STUDIO_MEDIA_ROOT = "/usr/share/nginx/media"
 STUDIO_REWRITES = {
     "index.html": (
-        ('  <a class="back-to-studio" href="/studio" data-studio-link>← Back to Studio</a>\n', ""),
         ("<span>omnibioai</span>", "<span>studio</span>"),
     ),
 }

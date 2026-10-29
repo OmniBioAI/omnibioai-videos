@@ -5,3 +5,6 @@ dist/
 coverage.json
 scripts/__pycache__/
 tests/__pycache__/
+node_modules/
+test-results/
+playwright-report/
