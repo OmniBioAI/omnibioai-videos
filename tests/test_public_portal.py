@@ -153,7 +153,8 @@ def _write_manifest(content_dir, entries):
 
 
 BUNDLE_FILES = {
-    "www/index.html", "www/portal.css", "www/portal.js",
+    "www/index.html", "www/omnibioai-design-tokens.css", "www/portal.css",
+    "www/embed-appearance.js", "www/portal.js",
     "publication/approved.tsv", "publication/entries/001.json", "publication/entries/001.conf",
 }
 
@@ -623,7 +624,9 @@ def test_portal_is_read_only_and_credential_free():
     assert ".tag-documentation" in css
     # nothing that a strict CSP (no unsafe-inline) would block or that hides behaviour in markup
     assert "onclick=" not in html and " style=" not in html
-    assert html.count("<script") == 1 and 'src="portal.js"' in html
+    assert html.count("<script") == 3
+    assert 'src="embed-appearance.js"' in html and 'src="portal.js"' in html
+    assert html.index("<script>") < html.index('<link rel="stylesheet"')  # pre-paint bootstrap
     assert not re.findall(r'(?:src|href)="/(?!studio")', html)  # only the Back to Studio link is absolute
     assert '<link rel="icon" href="data:,">' in html  # no /favicon.ico request -> no 404 noise in the console
 
@@ -1464,7 +1467,7 @@ def _grid_records(count, *, long_text=False, missing_thumbnail=False):
 def _static_portal_dir(tmp_path, records):
     root = tmp_path / f"static-portal-{uuid.uuid4().hex}"
     root.mkdir()
-    for name in ("index.html", "portal.css", "portal.js"):
+    for name in bp.PORTAL_FILES:
         shutil.copyfile(ROOT / "portal" / name, root / name)
     (root / "videos.json").write_text(json.dumps(records), encoding="utf-8")
     return root
