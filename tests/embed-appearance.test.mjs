@@ -113,7 +113,13 @@ test('CSP is a single always header and permits only Studio as the cross-origin 
     const nginx = fs.readFileSync(name, 'utf8');
     assert.equal((nginx.match(/add_header Content-Security-Policy/g) || []).length, 1);
     assert.match(nginx, /frame-ancestors 'self' https:\/\/webstudio\.omnibioai\.org[^\n]*" always;/);
-    assert.ok(nginx.includes(`'sha256-${digest}'`), `${name} must allow the exact pre-paint script`);
+    assert.match(nginx, /add_header Referrer-Policy "no-referrer" always;/);
+    const csp = nginx.match(/add_header Content-Security-Policy "([^"]+)" always;/)?.[1];
+    assert.ok(csp, `${name} must send one always CSP header`);
+    const scriptSrc = csp.match(/(?:^|;\s*)script-src\s+([^;]+)/)?.[1];
+    assert.ok(scriptSrc, `${name} must define script-src`);
+    assert.ok(scriptSrc.split(/\s+/).includes(`'sha256-${digest}'`),
+      `${name} script-src must allow the SHA-256 of the exact inline pre-paint script text`);
   }
   assert.match(fs.readFileSync('portal/portal.css', 'utf8'), /html\[data-embedded="true"\] \.topbar \{ display: none; \}/);
 });
