@@ -4,8 +4,8 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import test from 'node:test';
 
-const html = fs.readFileSync('portal/index.html', 'utf8');
-const source = fs.readFileSync('portal/embed-appearance.js', 'utf8');
+const html = fs.readFileSync('dist/web/index.html', 'utf8');
+const source = fs.readFileSync('public/embed-appearance.js', 'utf8');
 const bootstrap = html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
 
 function loadProtocol({ referrer = 'https://webstudio.omnibioai.org/workbench', devOrigin = '' } = {}) {
@@ -104,7 +104,8 @@ test('vendored design tokens are launcher 1.1.0 without tooling or a nested lock
   assert.equal(metadata.scripts, undefined);
   assert.equal(metadata.devDependencies, undefined);
   assert.equal(fs.existsSync('vendor/omnibioai-design-tokens/package-lock.json'), false);
-  assert.equal(fs.readFileSync('portal/omnibioai-design-tokens.css', 'utf8'), fs.readFileSync('vendor/omnibioai-design-tokens/tokens.css', 'utf8'));
+  assert.match(fs.readFileSync('src/main.jsx', 'utf8'), /vendor\/omnibioai-design-tokens\/tokens\.css/);
+  assert.match(fs.readFileSync('dist/web/portal.css', 'utf8'), /--color-bg:/);
 });
 
 test('CSP is a single always header and permits only Studio as the cross-origin framer', () => {

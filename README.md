@@ -2,10 +2,10 @@
 
 Video library and Getting Started guide service for the OmniBioAI Studio platform.
 
-Serves tutorial videos, workflow demonstrations, and the interactive Getting Started guide — all via a single nginx container with zero backend dependencies.
+Serves tutorial videos, workflow demonstrations, and the interactive Getting Started guide as a React 18 + Vite application behind nginx, with zero backend dependencies.
 
-The **public Video Tutorials library** lives in `portal/` and is built separately from the
-internal player in `content/index.html`. It is a YouTube-style library: a featured hero, a
+The **Video Tutorials library** lives in `src/VideoPortal.jsx`; Vite produces the same React
+application for the legacy, public, and Studio containers. It is a YouTube-style library: a featured hero, a
 responsive thumbnail grid, instant search with keyboard autocomplete, metadata-driven category
 chips, and a dedicated watch page (player, details, topics, Up next) addressable as `?v=<file>`.
 Search covers titles, descriptions, categories, tags, keywords, services, modules, and workflows;
@@ -22,13 +22,14 @@ for the optional discovery schema and the approval/build/runtime publication rul
 Studio's **Video Tutorials** page embeds the same library at its same-origin route
 `/_svc/videos/` (Studio keeps its own `← Back to Studio` toolbar). The Studio build is a
 variant of the public portal, not a second implementation: `scripts/build_public.py --variant studio`
-reuses `portal/` with document-relative URLs and without the portal's own Back to Studio link,
+reuses the Vite production build with document-relative URLs and without the portal's own Back to Studio link,
 and reuses the public selection, so **Studio lists and serves exactly the PUBLIC, hash-verified
 catalog**. `/_svc/videos` has no authentication of its own at the Studio router, so REVIEW_REQUIRED,
 INTERNAL and unregistered videos, their metadata and `guide.html` are not in the image at all.
 
 ```bash
-python scripts/build_public.py --variant studio --content content --out dist/studio
+npm ci && npm run build
+python scripts/build_public.py --variant studio --content content --portal dist/web --out dist/studio
 docker build -f Dockerfile.studio -t ghcr.io/omnibioai/omnibioai-videos:latest .
 ```
 
@@ -38,7 +39,7 @@ that holds the approved files (the manifest still comes from `--content`).
 
 The image bakes in only the approved media (copied and re-verified against the approved SHA-256),
 serves it at `/videos/<file>` and at the legacy `/<file>` URL, and answers 404 for everything
-else. The legacy `Dockerfile` / `content/index.html` below package the whole `content/` directory
+else. The legacy `Dockerfile` packages the React/Vite build plus the whole `content/` directory
 and every manifest entry; do not use them for Studio.
 
 ---
@@ -68,11 +69,17 @@ and every manifest entry; do not use them for Studio.
 
 ```
 omnibioai-videos/
+├── src/
+│   ├── VideoPortal.jsx   # Video library React application
+│   ├── GuideApp.jsx      # Interactive Getting Started guide (8 sections)
+│   └── main.jsx          # Portal entry point
 ├── content/
-│   ├── index.html        # Video library player — dark theme, manifest-driven
-│   ├── guide.html        # Interactive Getting Started guide (8 sections)
 │   ├── videos.json       # Video manifest — titles, descriptions, tags, ordering
 │   └── *.mp4 / *.mov     # Video files (added by user, not tracked in git)
+├── index.html            # Vite portal HTML shell
+├── guide.html            # Vite guide HTML shell
+├── vite.config.js        # Multi-page Vite production build
+├── dist/web/             # Reviewed deterministic Vite bundle used by offline deployment
 ├── nginx.conf            # nginx server configuration
 ├── Dockerfile            # Container build definition
 └── README.md             # This file
@@ -191,10 +198,11 @@ No rebuild needed. The player fetches `videos.json` on every page load.
 
 ### Updating the Guide
 
-`guide.html` is a standalone file — edit it directly, no build step needed:
+The guide is a React component. Edit it and run the Vite build:
 
 ```bash
-nano /home/manish/Desktop/omnibioai-ecosystem/omnibioai-videos/content/guide.html
+nano /home/manish/Desktop/omnibioai-ecosystem/omnibioai-videos/src/GuideApp.jsx
+npm run build
 ```
 
 To redeploy after editing:
@@ -361,8 +369,8 @@ To maintain consistency across videos:
 - Verify `nginx.conf` has the video location block
 
 ### guide.html not loading
-- Check the file is in `content/`: `ls content/guide.html`
-- Verify the container was rebuilt after adding the file
+- Run `npm run build` and verify `dist/web/guide.html` exists
+- Verify the container was rebuilt after changing the React application
 
 ### Container not starting
 ```bash

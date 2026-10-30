@@ -45,8 +45,10 @@ Recording the hash records **what** was approved; it does not by itself record *
 
 ## Searchable Video Tutorials library
 
-`portal/index.html`, `portal/portal.js`, and `portal/portal.css` implement the public library,
-independently of the internal player. The browser fetches `/videos.json` once, without credentials,
+`src/VideoPortal.jsx` and `portal/portal.css` implement the React library; Vite emits the
+allowlisted production assets in `dist/web`. That deterministic bundle is tracked so the hardened
+offline deployment hook can publish it without downloading npm packages. The browser fetches
+`videos.json` once, without credentials,
 then searches and filters that eligible snapshot locally. It never fetches the source manifest.
 Counts, sections, category chips, and autocomplete all use the same authorized records.
 `REVIEW_REQUIRED`, `INTERNAL`, unclassified, and hash-withheld entries contribute no filenames,
@@ -190,7 +192,8 @@ BUILD=$(mktemp -d)
 GIT_LFS_SKIP_SMUDGE=1 git archive "$SHA" | tar -x -C "$BUILD"    # code + reviewed manifest; no media bytes
 cd "$BUILD"
 
-STUDIO_URL=https://webstudio.omnibioai.org python3 scripts/build_public.py --content content --media-dir "$HOSTCONTENT" --out dist/public
+npm ci && npm run build
+STUDIO_URL=https://webstudio.omnibioai.org python3 scripts/build_public.py --content content --media-dir "$HOSTCONTENT" --portal dist/web --out dist/public
 docker build -f Dockerfile.public -t omnibioai-videos-public:"${SHA:0:12}" -t omnibioai-videos-public:local .
 VIDEOS_CONTENT_DIR="$HOSTCONTENT" docker compose -p omnibioai-public-videos \
   -f "$BUILD/deploy/docker-compose.public.yml" up -d

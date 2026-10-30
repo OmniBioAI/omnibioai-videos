@@ -3,13 +3,20 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
-    "@omnibioai/design-tokens": "file:./vendor/omnibioai-design-tokens"
+    "@omnibioai/design-tokens": "file:./vendor/omnibioai-design-tokens",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
   },
   "scripts": {
-    "test": "node --test tests/*.test.mjs",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "npm run build && node --test tests/*.test.mjs",
     "test:e2e": "playwright test"
   },
   "devDependencies": {
-    "@playwright/test": "1.64.1"
+    "@playwright/test": "1.64.1",
+    "@vitejs/plugin-react": "4.3.4",
+    "vite": "6.4.5"
   }
 }
