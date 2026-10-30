@@ -47,8 +47,11 @@ Recording the hash records **what** was approved; it does not by itself record *
 
 `src/VideoPortal.jsx` and `portal/portal.css` implement the React library; Vite emits the
 allowlisted production assets in `dist/web`. That deterministic bundle is tracked so the hardened
-offline deployment hook can publish it without downloading npm packages. The browser fetches
-`videos.json` once, without credentials,
+offline deployment hook can publish it without downloading npm packages while preserving an exact
+file allowlist. The generated HTML and React chunk attach the same
+content-derived `?v=` identity to every asset reference, preventing an edge or browser cache from
+pairing a legacy `portal.js` with a newer React HTML shell during a deployment.
+The browser fetches `videos.json` once, without credentials,
 then searches and filters that eligible snapshot locally. It never fetches the source manifest.
 Counts, sections, category chips, and autocomplete all use the same authorized records.
 `REVIEW_REQUIRED`, `INTERNAL`, unclassified, and hash-withheld entries contribute no filenames,

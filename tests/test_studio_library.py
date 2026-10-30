@@ -431,7 +431,8 @@ def test_studio_image_contains_only_approved_media_and_no_content_dir(studio_sta
                    "find /usr/share/nginx /etc/nginx/studio -type f | sort").stdout.split()
     assert listing == [
         "/etc/nginx/studio/media.conf",
-        *(f"/usr/share/nginx/html/{n}" for n in ("index.html", "portal.css", "portal.js", "videos.json")),
+        *(f"/usr/share/nginx/html/{n}" for n in
+          ("embed-appearance.js", "index.html", "portal.css", "portal.js", "shared.js", "videos.json")),
         *(f"/usr/share/nginx/media/{r['filename']}" for r in sorted(studio_records(), key=lambda r: r["filename"])),
     ]
 
@@ -440,11 +441,13 @@ def test_studio_image_contains_only_approved_media_and_no_content_dir(studio_sta
 def test_studio_image_serves_the_library_through_the_router(studio_stack):
     site = studio_stack["proxied"]
     status, headers, body = site.get(PREFIX)
-    assert status == 200 and b'src="portal.js"' in body and b"back-to-studio" not in body
+    assert status == 200 and re.search(rb'src="(?:\./)?portal\.js\?v=[0-9a-f]{16}"', body) and b"back-to-studio" not in body
     assert "frame-ancestors 'self'" in headers["content-security-policy"]
     assert headers["x-frame-options"] == "SAMEORIGIN" and headers["x-content-type-options"] == "nosniff"
     assert "access-control-allow-origin" not in headers
     assert site.get(PREFIX + "portal.js")[0] == 200 and site.get(PREFIX + "portal.css")[0] == 200
+    embed_status, embed_headers, _ = site.get(PREFIX + "embed-appearance.js")
+    assert embed_status == 200 and embed_headers["content-type"].startswith("application/javascript")
     catalog = json.loads(site.get(PREFIX + "videos.json")[2])
     assert [v["filename"] for v in catalog] == [r["filename"] for r in studio_records()]
     status, headers, _ = site.request("HEAD", PREFIX + "videos/rna.mp4")
@@ -457,6 +460,9 @@ def test_studio_image_serves_the_library_through_the_router(studio_stack):
     assert status == 301 and headers["location"] == PREFIX
     status, _, body = studio_stack["direct"].get("/health")
     assert status == 200 and body == b'{"status":"ok"}'
+    status, headers, body = site.get(PREFIX + "missing.js")
+    assert status == 404 and not headers["content-type"].startswith("text/html")
+    assert b"<title>OmniBioAI" not in body
 
 
 @pytest.mark.docker

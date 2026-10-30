@@ -204,6 +204,7 @@ export default function VideoPortal() {
   const initial = useMemo(initialLocation, []);
   const [videos, setVideos] = useState([]);
   const [loadState, setLoadState] = useState("loading");
+  const [loadError, setLoadError] = useState("");
   const [query, setQuery] = useState(initial.query);
   const [filter, setFilter] = useState(initial.filter);
   const [watching, setWatching] = useState(initial.video);
@@ -229,7 +230,11 @@ export default function VideoPortal() {
     let active = true;
     fetch("videos.json", { credentials: "omit" })
       .then((response) => {
-        if (!response.ok) throw new Error("catalog unavailable");
+        if (!response.ok) {
+          const error = new Error("catalog unavailable");
+          error.status = response.status;
+          throw error;
+        }
         return response.json();
       })
       .then((catalog) => {
@@ -238,7 +243,13 @@ export default function VideoPortal() {
         setVideos(nextVideos);
         setLoadState(nextVideos.length ? "ready" : "empty");
       })
-      .catch(() => active && setLoadState("error"));
+      .catch((error) => {
+        if (!active) return;
+        setLoadError(error?.status === 429
+          ? "The video catalog is temporarily rate limited. Please wait a moment and try again."
+          : "Please try again later.");
+        setLoadState("error");
+      });
     return () => { active = false; };
   }, []);
 
@@ -415,7 +426,7 @@ export default function VideoPortal() {
           </p>
           <div id="content">
             {loadState === "loading" && <div className="state-box"><div className="spinner" /><p>Loading videos...</p></div>}
-            {loadState === "error" && <div className="state-box"><div className="state-icon">!</div><h3>Video catalog unavailable</h3><p>Please try again later.</p></div>}
+            {loadState === "error" && <div className="state-box" role="alert"><div className="state-icon">!</div><h3>Video catalog unavailable</h3><p>{loadError}</p></div>}
             {loadState === "empty" && <div className="state-box"><div className="state-icon">▶</div><h3>Videos coming soon</h3><p>New OmniBioAI tutorials are being prepared.</p></div>}
             {loadState === "ready" && atHome && featured && <Hero video={featured} onOpen={openWatch} />}
             {loadState === "ready" && filtered.length === 0 && <div className="state-box"><div className="state-icon">⌕</div><h3>No videos found{query ? ` for “${query}”` : ""}</h3><p>Try another search or category.</p><button type="button" onClick={() => changeQuery("")}>Clear search</button></div>}

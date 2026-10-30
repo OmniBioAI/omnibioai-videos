@@ -662,7 +662,9 @@ def test_public_nginx_conf_is_strict_and_has_no_generic_media_alias():
     assert "GET|HEAD" in code and "return 405" in code
     assert "include /run/publication/media.conf;" in code and "alias /run/publication/videos.json;" in code
     assert "location ^~ /videos/ {\n        return 404;\n    }" in code  # unknown /videos/* -> 404
-    assert code.rstrip().endswith("location / {\n        return 404;\n    }\n}")
+    assert code.rstrip().endswith(
+        'location / {\n        default_type text/plain;\n        return 404 "Not Found\\n";\n    }\n}'
+    )
     assert "default-src 'none'" in code and "frame-ancestors 'self' https://webstudio.omnibioai.org\"" in code
 
 
@@ -1009,11 +1011,19 @@ def test_image_contains_no_video_content_directory_or_restricted_files(built):
 def test_anonymous_user_can_load_the_public_portal(site):
     status, headers, body = site.get("/")
     assert status == 200 and headers["content-type"].startswith("text/html")
-    assert b"<title>OmniBioAI" in body and b'src="./portal.js"' in body
+    assert b"<title>OmniBioAI" in body and re.search(rb'src="\./portal\.js\?v=[0-9a-f]{16}"', body)
     assert site.get("/index.html")[0] == 200
     assert site.get("/portal.css")[0] == 200
     assert site.get("/portal.js")[0] == 200
     assert site.get("/shared.js")[0] == 200
+    embed_status, embed_headers, _ = site.get("/embed-appearance.js")
+    assert embed_status == 200 and embed_headers["content-type"].startswith("application/javascript")
+    catalog_status, catalog_headers, catalog_body = site.get("/videos.json")
+    assert catalog_status == 200 and catalog_headers["content-type"].startswith("application/json")
+    assert isinstance(json.loads(catalog_body), list)
+    missing_status, missing_headers, missing_body = site.get("/missing.js")
+    assert missing_status == 404 and not missing_headers["content-type"].startswith("text/html")
+    assert b"<title>OmniBioAI" not in missing_body
     assert "set-cookie" not in headers
 
 
@@ -1058,8 +1068,11 @@ def test_portal_loads_under_the_studio_prefix_without_any_404(site):
         js = proxy.get("/_svc/videos/portal.js")[2].decode()
         # Resolve exactly as the browser does: markup URLs, the catalog fetch and the media URL builder.
         refs = [u for u in re.findall(r'(?:src|href)="([^"]+)"', html) if not u.startswith(("data:", "http"))]
-        refs += re.findall(r"fetch\('([^']+)'", js)
+        refs += re.findall(r'fetch\(["\']([^"\']+)["\']', js)
+        # Vite may render the media builder as concatenation or a template literal.
         media = re.findall(r"url: '([^']+)' \+ encodeURIComponent", js)
+        if not media and re.search(r"videos/\$\{encodeURIComponent\(", js):
+            media = ["videos/"]
         assert refs and len(media) == 1
         catalog = json.loads(proxy.get(urllib.parse.urlparse(urllib.parse.urljoin(base, "videos.json")).path)[2])
         refs += [media[0] + urllib.parse.quote(v["filename"]) for v in catalog]
