@@ -22,6 +22,8 @@ _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 # Statuses the central router's ingest handler returns for accepted or
 # duplicate events: 200 once delivered, 202 otherwise.
 _ACCEPTED_STATUSES = frozenset({200, 202})
+# Cloudflare bans urllib's default "Python-urllib/x.y" signature (error 1010).
+_USER_AGENT = "omnibioai-discord-publisher/1.0"
 
 
 class SubmissionError(ValueError):
@@ -144,7 +146,8 @@ def _submit(event: dict[str, str], *, base_url: str, secret: str, commit: str) -
     timestamp, nonce = str(int(time.time())), secrets.token_urlsafe(18)
     signature = hmac.new(secret.encode(), timestamp.encode() + b"\n" + nonce.encode() + b"\n" + body, hashlib.sha256).hexdigest()
     headers = {
-        "Content-Type": "application/json", "X-Omni-Discord-Source": "video",
+        "Content-Type": "application/json", "User-Agent": _USER_AGENT,
+        "X-Omni-Discord-Source": "video",
         "X-Omni-Discord-Timestamp": timestamp, "X-Omni-Discord-Nonce": nonce,
         "X-Omni-Discord-Signature": "v1=" + signature,
     }
