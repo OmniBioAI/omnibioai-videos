@@ -102,7 +102,7 @@ def check_site(base_url: str, manifest_path: Path, media_dir: Path) -> list[Resu
     rec("host files match approved sha256/size", True, f"{len(items)} PUBLIC video(s) verified on host")
 
     # ── portal + catalog ────────────────────────────────────────────────────────
-    for path in ("/", "/portal.css", "/portal.js", "/health"):
+    for path in ("/", "/portal.css", "/portal.js", "/shared.js", "/health"):
         status, _, _ = client.request("GET", path)
         rec(f"GET {path} -> 200", status == 200, str(status))
     status, headers, body = client.request("GET", "/videos.json")

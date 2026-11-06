@@ -25,7 +25,7 @@ read-only into the container at request time.
 
 Output layout (``--out``)::
 
-    www/index.html, portal.css, portal.js      web root (static portal only)
+    www/index.html, portal.css, *.js           web root (React/Vite portal only)
     publication/approved.tsv                   id <TAB> sha256 <TAB> size <TAB> filename
     publication/entries/<id>.json              one public catalog record
     publication/entries/<id>.conf              exact-match nginx location for that file
@@ -42,14 +42,15 @@ prefix, and the portal's own "Back to Studio" link is dropped because Studio's
 shell already supplies that navigation. Its image bakes in the approved media
 (copied here and re-verified), so the layout is::
 
-    www/index.html, portal.css, portal.js      web root (rewritten portal)
+    www/index.html, portal.css, *.js           web root (rewritten React/Vite portal)
     www/videos.json                            the catalog (PUBLIC projection)
     nginx/media.conf                           exact-match locations for approved files
     media/<file>                               approved, re-verified media only
 
 Usage::
 
-    python scripts/build_public.py [--content content] [--media-dir DIR] [--portal portal] [--out dist/public]
+    npm run build
+    python scripts/build_public.py [--content content] [--media-dir DIR] [--portal dist/web] [--out dist/public]
     python scripts/build_public.py --variant studio [--content content] [--media-dir DIR] [--out dist/studio]
 
 Developer: Manish Kumar <manish@omnibioai.org>
@@ -96,8 +97,9 @@ STUDIO_HOST_RE = re.compile(
     r"(?::[0-9]{1,5})?$"
 )
 
-# Static portal files copied verbatim into the web root (allowlist).
-PORTAL_FILES = ("index.html", "omnibioai-design-tokens.css", "portal.css", "embed-appearance.js", "portal.js")
+# Vite production assets copied verbatim into the published web root (allowlist).
+# Keeping this list explicit preserves the existing fail-closed publication boundary.
+PORTAL_FILES = ("index.html", "portal.css", "embed-appearance.js", "portal.js", "shared.js")
 
 # Text that must never appear in anything we publish. Deliberately broad:
 # a false positive stops the build, a false negative publishes a secret.
@@ -126,9 +128,10 @@ FORBIDDEN_PATTERNS = {
 # media URLs need no rewrite: the portal source is document-relative so the same build
 # works at / and under /_svc/videos/ (tests reject any root-absolute URL).
 STUDIO_MEDIA_ROOT = "/usr/share/nginx/media"
+STUDIO_CONFIG_ANCHOR = '<a href="/studio" data-studio-link hidden></a>'
 STUDIO_REWRITES = {
     "index.html": (
-        ("<span>omnibioai</span>", "<span>studio</span>"),
+        (STUDIO_CONFIG_ANCHOR, ""),
     ),
 }
 
@@ -427,7 +430,10 @@ def build(
         shutil.rmtree(out_dir)
         raise PublishError("portal index must contain exactly one Studio link marker")
     index_path.write_text(
-        index.replace(STUDIO_LINK_MARKER, f'href="{html.escape(studio_origin, quote=True)}/studio"'),
+        index.replace(
+            STUDIO_LINK_MARKER,
+            f'href="{html.escape(studio_origin, quote=True)}/studio" data-studio-link',
+        ),
         encoding="utf-8",
     )
 
@@ -538,7 +544,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--content", type=Path, default=Path("content"), help="directory holding videos.json")
     parser.add_argument("--manifest", type=Path, help="videos.json path (default: <content>/videos.json)")
     parser.add_argument("--media-dir", type=Path, help="host media directory to verify (default: --content)")
-    parser.add_argument("--portal", type=Path, default=Path("portal"))
+    parser.add_argument("--portal", type=Path, default=Path("dist/web"), help="Vite production build directory")
     parser.add_argument(
         "--variant", choices=("public", "studio"), default="public",
         help="public: videos.omnibioai.org bundle; studio: Studio's videos:8086 image (PUBLIC catalog only)",

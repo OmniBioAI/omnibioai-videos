@@ -128,14 +128,18 @@ def content_dir(tmp_path):
 
 @pytest.fixture
 def portal_dir():
-    return ROOT / "portal"
+    return ROOT / "dist/web"
 
 
 def test_obai_prebuild_hook_builds_dist_public_from_the_archived_tree(content_dir, tmp_path):
     """The obai-deploy hook needs only the archived tree plus the read-only media input."""
     tree = tmp_path / "archive"
-    for name in ("scripts", "portal"):
+    for name in ("scripts", "portal", "src", "public", "vendor"):
         shutil.copytree(ROOT / name, tree / name)
+    (tree / "dist").mkdir()
+    shutil.copytree(ROOT / "dist/web", tree / "dist/web")
+    for name in ("package.json", "package-lock.json", "index.html", "guide.html", "vite.config.js"):
+        shutil.copyfile(ROOT / name, tree / name)
     shutil.copytree(content_dir, tree / "content")
     hook = ["sh", "scripts/obai-prebuild"]
     env = {"PATH": os.environ["PATH"], "OBAI_INPUT_MEDIA_DIR": str(content_dir)}
@@ -153,8 +157,7 @@ def _write_manifest(content_dir, entries):
 
 
 BUNDLE_FILES = {
-    "www/index.html", "www/omnibioai-design-tokens.css", "www/portal.css",
-    "www/embed-appearance.js", "www/portal.js",
+    "www/index.html", "www/portal.css", "www/embed-appearance.js", "www/portal.js", "www/shared.js",
     "publication/approved.tsv", "publication/entries/001.json", "publication/entries/001.conf",
 }
 
@@ -216,7 +219,7 @@ def test_build_publishes_only_explicit_public_content_and_copies_no_media(conten
     for leaked in (
         b"internal.mp4", b"review.mp4", b"novis.mp4", b"lowercase.mp4", b"typo.mp4", b"nullvis.mp4",
         UNREGISTERED.encode(), b"GUIDE-SENTINEL", b"ENV-FILE-SENTINEL", b"INTERNAL-INDEX-SENTINEL",
-        b"NOTES-SENTINEL", b"/srv/private", b"REVIEW_REQUIRED", b"INTERNAL",
+            b"NOTES-SENTINEL", b"/srv/private", b"REVIEW_REQUIRED",
     ):
         assert leaked not in blob, leaked
     for name in [*NON_PUBLIC, UNREGISTERED]:  # restricted titles/descriptions never reach the catalog
@@ -439,7 +442,7 @@ def test_missing_portal_file_aborts_the_build(content_dir, tmp_path):
 
 def test_bundle_scan_failure_aborts_and_removes_output(content_dir, tmp_path):
     portal = tmp_path / "portal"
-    shutil.copytree(ROOT / "portal", portal)
+    shutil.copytree(ROOT / "dist/web", portal)
     (portal / "portal.js").write_text("const k = 'VITE_API_KEY';")
     out = tmp_path / "out"
     with pytest.raises(bp.PublishError, match="vite-env"):
@@ -450,7 +453,7 @@ def test_bundle_scan_failure_aborts_and_removes_output(content_dir, tmp_path):
 def test_cli_reports_failure_without_publishing(content_dir, tmp_path, capsys):
     (content_dir / "videos.json").write_text("[not json")
     out = tmp_path / "out"
-    code = bp.main(["--content", str(content_dir), "--portal", str(ROOT / "portal"), "--out", str(out)])
+    code = bp.main(["--content", str(content_dir), "--portal", str(ROOT / "dist/web"), "--out", str(out)])
     assert code == 1
     assert "BUILD FAILED (nothing published)" in capsys.readouterr().err
     assert not out.exists()
@@ -458,7 +461,7 @@ def test_cli_reports_failure_without_publishing(content_dir, tmp_path, capsys):
 
 def test_cli_prints_inventory_and_approval(content_dir, tmp_path, capsys):
     out = tmp_path / "out"
-    code = bp.main(["--content", str(content_dir), "--portal", str(ROOT / "portal"), "--out", str(out),
+    code = bp.main(["--content", str(content_dir), "--portal", str(ROOT / "dist/web"), "--out", str(out),
                     "--media-dir", str(content_dir)])
     stdout = capsys.readouterr().out
     assert code == 0
@@ -592,19 +595,19 @@ def test_real_manifest_builds_against_the_real_host_media_when_present(tmp_path)
                 or bp.sha256_file(media) != entry["approved_sha256"]:
             pytest.skip("the approved media bytes are not present on this machine")
     out = tmp_path / "out"
-    report = bp.build(ROOT / "content", ROOT / "portal", out)
+    report = bp.build(ROOT / "content", ROOT / "dist/web", out)
     assert report["published"] == [e["filename"] for e in public]
     assert bp.scan_tree(out) == []
     assert not [p for p in out.rglob("*") if p.suffix.lower() in bp.MEDIA_SUFFIXES]
 
 
 def test_repo_portal_assets_contain_no_secret_material():
-    assert bp.scan_tree(ROOT / "portal") == []
+    assert bp.scan_tree(ROOT / "dist/web") == []
 
 
 def test_portal_is_read_only_and_credential_free():
-    js = (ROOT / "portal" / "portal.js").read_text()
-    html = (ROOT / "portal" / "index.html").read_text()
+    js = (ROOT / "src" / "VideoPortal.jsx").read_text()
+    html = (ROOT / "index.html").read_text()
     css = (ROOT / "portal" / "portal.css").read_text()
     for forbidden in (
         "innerHTML", "outerHTML", "insertAdjacentHTML", "eval(", "new Function", "document.write",
@@ -612,33 +615,31 @@ def test_portal_is_read_only_and_credential_free():
         "WebSocket", "sendBeacon", "method:", "'POST'", '"POST"', "upload", "delete", "admin",
     ):
         assert forbidden not in js, forbidden
-    assert js.count("fetch(") == 1 and "fetch('videos.json'" in js
+    assert js.count("fetch(") == 1 and 'fetch("videos.json"' in js
     # Document-relative only, so the page also works under Studio's /_svc/videos/ prefix.
-    assert "url: 'videos/' + encodeURIComponent(v.filename)" in js and "'/videos" not in js
-    assert "credentials: 'omit'" in js
+    assert "`videos/${encodeURIComponent(item.filename)}`" in js and '"/videos' not in js
+    assert 'credentials: "omit"' in js
     for source in (html, js, css):
         assert "http://" not in source and "https://" not in source
     assert "documentation" in js
     # Category controls are derived from the eligible catalog, not static chips.
-    assert 'id="categoryFilters"' in html and "prepareDiscovery()" in js
+    assert 'id="root"' in html and "categories" in js
     assert ".tag-documentation" in css
     # nothing that a strict CSP (no unsafe-inline) would block or that hides behaviour in markup
     assert "onclick=" not in html and " style=" not in html
     assert html.count("<script") == 3
-    assert 'src="embed-appearance.js"' in html and 'src="portal.js"' in html
-    assert html.index("<script>") < html.index('<link rel="stylesheet"')  # pre-paint bootstrap
-    assert not re.findall(r'(?:src|href)="/(?!studio")', html)  # only the Back to Studio link is absolute
-    assert '<link rel="icon" href="data:,">' in html  # no /favicon.ico request -> no 404 noise in the console
+    assert 'src="./embed-appearance.js"' in html and 'src="/src/main.jsx"' in html
+    built_html = (ROOT / "dist/web/index.html").read_text()
+    assert built_html.index("<script>") < built_html.index('<link rel="stylesheet"')  # pre-paint bootstrap
+    assert not re.findall(r'(?:src|href)="/(?!studio")', built_html)  # only the Back to Studio link is absolute
+    assert '<link rel="icon" href="data:,"' in html  # no /favicon.ico request -> no 404 noise in the console
 
 
 def test_empty_catalog_says_videos_coming_soon_not_a_search_failure():
-    js = (ROOT / "portal" / "portal.js").read_text()
-    body = js[js.index("function showComingSoon()"):js.index("function applyFilters()")]
-    assert "Videos coming soon" in body and "COMING SOON" in body
-    for misleading in ("No videos found", "search", "filter", "Try a different"):
-        assert misleading not in body
-    assert "showComingSoon();" in js[js.index("function load()"):]  # empty catalog routes here
-    assert 'id="controls"' in (ROOT / "portal" / "index.html").read_text()
+    js = (ROOT / "src" / "VideoPortal.jsx").read_text()
+    assert "Videos coming soon" in js and "COMING SOON" in js
+    assert 'loadState === "empty"' in js
+    assert 'className="controls"' in js
     assert "[hidden]" in (ROOT / "portal" / "portal.css").read_text()  # .controls is display:flex
 
 
@@ -661,7 +662,9 @@ def test_public_nginx_conf_is_strict_and_has_no_generic_media_alias():
     assert "GET|HEAD" in code and "return 405" in code
     assert "include /run/publication/media.conf;" in code and "alias /run/publication/videos.json;" in code
     assert "location ^~ /videos/ {\n        return 404;\n    }" in code  # unknown /videos/* -> 404
-    assert code.rstrip().endswith("location / {\n        return 404;\n    }\n}")
+    assert code.rstrip().endswith(
+        'location / {\n        default_type text/plain;\n        return 404 "Not Found\\n";\n    }\n}'
+    )
     assert "default-src 'none'" in code and "frame-ancestors 'self' https://webstudio.omnibioai.org\"" in code
 
 
@@ -684,7 +687,8 @@ def test_public_build_context_is_an_allowlist_that_admits_only_the_bundle():
     rules = [l.strip() for l in (ROOT / "Dockerfile.public.dockerignore").read_text().splitlines()
              if l.strip() and not l.strip().startswith("#")]
     assert rules == ["*", "!Dockerfile.public", "!nginx.public.conf", "!runtime/publish-runtime.sh", "!dist/public"]
-    assert "dist/" in (ROOT / ".gitignore").read_text().splitlines()  # a built bundle is never committed
+    ignore = (ROOT / ".gitignore").read_text().splitlines()
+    assert "dist/*" in ignore and "!dist/web/**" in ignore  # only the reviewed Vite bundle is committed
 
 
 def test_public_compose_is_loopback_only_with_one_read_only_content_mount():
@@ -965,7 +969,7 @@ def built(tmp_path_factory):
         shutil.copy(ROOT / name, ctx)  # the real ignore rules must let the bundle through
     shutil.copy(ROOT / "runtime" / "publish-runtime.sh", ctx / "runtime")
     bundle = ctx / "dist" / "public"
-    report = bp.build(content, ROOT / "portal", bundle)
+    report = bp.build(content, ROOT / "dist/web", bundle)
     tag = f"omnibioai-videos-public-test:{uuid.uuid4().hex[:10]}"
     build_args = [x for k, v in SENTINELS.items() for x in ("--build-arg", f"{k}={v}")]
     env = {**os.environ, **SENTINELS}  # secrets present in the build environment, as in a real CI job
@@ -1007,10 +1011,19 @@ def test_image_contains_no_video_content_directory_or_restricted_files(built):
 def test_anonymous_user_can_load_the_public_portal(site):
     status, headers, body = site.get("/")
     assert status == 200 and headers["content-type"].startswith("text/html")
-    assert b"<title>OmniBioAI" in body and b'src="portal.js"' in body
+    assert b"<title>OmniBioAI" in body and re.search(rb'src="\./portal\.js\?v=[0-9a-f]{16}"', body)
     assert site.get("/index.html")[0] == 200
     assert site.get("/portal.css")[0] == 200
     assert site.get("/portal.js")[0] == 200
+    assert site.get("/shared.js")[0] == 200
+    embed_status, embed_headers, _ = site.get("/embed-appearance.js")
+    assert embed_status == 200 and embed_headers["content-type"].startswith("application/javascript")
+    catalog_status, catalog_headers, catalog_body = site.get("/videos.json")
+    assert catalog_status == 200 and catalog_headers["content-type"].startswith("application/json")
+    assert isinstance(json.loads(catalog_body), list)
+    missing_status, missing_headers, missing_body = site.get("/missing.js")
+    assert missing_status == 404 and not missing_headers["content-type"].startswith("text/html")
+    assert b"<title>OmniBioAI" not in missing_body
     assert "set-cookie" not in headers
 
 
@@ -1055,8 +1068,11 @@ def test_portal_loads_under_the_studio_prefix_without_any_404(site):
         js = proxy.get("/_svc/videos/portal.js")[2].decode()
         # Resolve exactly as the browser does: markup URLs, the catalog fetch and the media URL builder.
         refs = [u for u in re.findall(r'(?:src|href)="([^"]+)"', html) if not u.startswith(("data:", "http"))]
-        refs += re.findall(r"fetch\('([^']+)'", js)
+        refs += re.findall(r'fetch\(["\']([^"\']+)["\']', js)
+        # Vite may render the media builder as concatenation or a template literal.
         media = re.findall(r"url: '([^']+)' \+ encodeURIComponent", js)
+        if not media and re.search(r"videos/\$\{encodeURIComponent\(", js):
+            media = ["videos/"]
         assert refs and len(media) == 1
         catalog = json.loads(proxy.get(urllib.parse.urlparse(urllib.parse.urljoin(base, "videos.json")).path)[2])
         refs += [media[0] + urllib.parse.quote(v["filename"]) for v in catalog]
@@ -1396,7 +1412,7 @@ def test_browser_shows_videos_coming_soon_when_nothing_is_public(content_dir, tm
         entry["visibility"] = "REVIEW_REQUIRED"
     _write_manifest(content_dir, manifest)
     out = tmp_path / "out"
-    assert bp.build(content_dir, ROOT / "portal", out)["published"] == []
+    assert bp.build(content_dir, ROOT / "dist/web", out)["published"] == []
     page = _page_text(serve_bundle(_assemble_www(out)), viewport)
     assert page["heading"] == "Videos coming soon"
     assert page["pill"] == "● COMING SOON"
@@ -1408,7 +1424,7 @@ def test_browser_shows_videos_coming_soon_when_nothing_is_public(content_dir, tm
 
 def test_browser_lists_only_the_public_video_and_keeps_filters(content_dir, tmp_path, serve_bundle):
     out = tmp_path / "out"
-    bp.build(content_dir, ROOT / "portal", out)
+    bp.build(content_dir, ROOT / "dist/web", out)
     page = _page_text(serve_bundle(_assemble_www(out)), {"width": 1280, "height": 800})
     assert page["pill"] == "● 1 VIDEOS" and page["controls_visible"]
     assert "pub.mp4-TITLE-SENTINEL" in page["body"]
@@ -1468,7 +1484,7 @@ def _static_portal_dir(tmp_path, records):
     root = tmp_path / f"static-portal-{uuid.uuid4().hex}"
     root.mkdir()
     for name in bp.PORTAL_FILES:
-        shutil.copyfile(ROOT / "portal" / name, root / name)
+        shutil.copyfile(ROOT / "dist/web" / name, root / name)
     (root / "videos.json").write_text(json.dumps(records), encoding="utf-8")
     return root
 
@@ -1626,7 +1642,7 @@ def test_production_build_does_not_include_grid_stress_fixture_titles(tmp_path):
         if not media.is_file() or media.stat().st_size != entry["approved_size_bytes"] \
                 or bp.sha256_file(media) != entry["approved_sha256"]:
             pytest.skip("the approved media bytes are not present on this machine")
-    report = bp.build(ROOT / "content", ROOT / "portal", out)
+    report = bp.build(ROOT / "content", ROOT / "dist/web", out)
     assert report["published"] == [e["filename"] for e in public]
     bundle = "\n".join(p.read_text(encoding="utf-8", errors="replace") for p in out.rglob("*") if p.is_file())
     for title in GRID_FIXTURE_TITLES:

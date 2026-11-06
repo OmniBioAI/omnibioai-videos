@@ -119,7 +119,7 @@ def test_docker_skip_and_known_routing_failure_branches(monkeypatch):
         patch.setattr(
             Path,
             "read_text",
-            lambda self, encoding: "fetch(`${API}/videos.json`) fetch(`${API}/videos/`)",
+            lambda self, encoding: "invalid vite configuration",
         )
         with pytest.raises(AssertionError):
-            static_tests.test_index_uses_the_same_video_urls_as_the_nginx_configuration()
+            static_tests.test_vite_has_two_react_entry_points_and_no_legacy_html_app()

@@ -81,9 +81,10 @@ def assert_no_leak(text):
 
 def test_studio_bundle_contains_only_the_verified_public_catalog_and_media(content_dir, tmp_path):
     out = tmp_path / "studio"
-    report = bp.build_studio(content_dir, ROOT / "portal", out)
+    report = bp.build_studio(content_dir, ROOT / "dist/web", out)
     files = _walk_bytes(out)
-    assert set(files) == {"www/index.html", "www/portal.css", "www/portal.js", "www/videos.json",
+    assert set(files) == {"www/index.html", "www/portal.css", "www/portal.js", "www/shared.js",
+                          "www/embed-appearance.js", "www/videos.json",
                           "nginx/media.conf", "media/pub.mp4"}
     assert files["media/pub.mp4"] == PUBLIC_BYTES
     assert report["published"] == ["pub.mp4"]
@@ -104,8 +105,8 @@ def test_studio_catalog_matches_public_catalog_minus_thumbnails(content_dir, tmp
     manifest = json.loads((content_dir / "videos.json").read_text())
     manifest[0].update(thumbnail="thumbs/pub.jpg", category="Workflows", tags=["rna-seq"], duration=90)
     _write_manifest(content_dir, manifest)
-    bp.build(content_dir, ROOT / "portal", tmp_path / "public")
-    bp.build_studio(content_dir, ROOT / "portal", tmp_path / "studio")
+    bp.build(content_dir, ROOT / "dist/web", tmp_path / "public")
+    bp.build_studio(content_dir, ROOT / "dist/web", tmp_path / "studio")
     public = json.loads((tmp_path / "public" / "publication" / "entries" / "001.json").read_text())
     studio = json.loads((tmp_path / "studio" / "www" / "videos.json").read_text())
     assert public.pop("thumbnail") == "thumbs/pub.jpg"  # the Studio image serves no image files
@@ -113,7 +114,7 @@ def test_studio_catalog_matches_public_catalog_minus_thumbnails(content_dir, tmp
 
 
 def test_studio_media_allowlist_is_exact_and_keeps_legacy_root_urls(content_dir, tmp_path):
-    bp.build_studio(content_dir, ROOT / "portal", tmp_path / "studio")
+    bp.build_studio(content_dir, ROOT / "dist/web", tmp_path / "studio")
     conf = (tmp_path / "studio" / "nginx" / "media.conf").read_text()
     assert re.findall(r"location (\S+) (\S+) \{", conf) == [("=", "/videos/pub.mp4"), ("=", "/pub.mp4")]
     assert conf.count("alias /usr/share/nginx/media/pub.mp4;") == 2
@@ -121,25 +122,24 @@ def test_studio_media_allowlist_is_exact_and_keeps_legacy_root_urls(content_dir,
 
 
 def test_studio_portal_is_the_public_source_with_only_relative_urls_and_no_second_back_link(content_dir, tmp_path):
-    bp.build_studio(content_dir, ROOT / "portal", tmp_path / "studio")
+    bp.build_studio(content_dir, ROOT / "dist/web", tmp_path / "studio")
     www = tmp_path / "studio" / "www"
-    assert (www / "portal.css").read_bytes() == (ROOT / "portal" / "portal.css").read_bytes()
-    for name in ("index.html", "portal.js"):  # the declared rewrites are the only differences
-        expected = (ROOT / "portal" / name).read_text()
+    assert (www / "portal.css").read_bytes() == (ROOT / "dist/web" / "portal.css").read_bytes()
+    for name in bp.PORTAL_FILES:  # the declared rewrites are the only differences
+        expected = (ROOT / "dist/web" / name).read_text()
         for old, new in bp.STUDIO_REWRITES.get(name, ()):
             expected = expected.replace(old, new)
         assert (www / name).read_text() == expected
     html, js = (www / "index.html").read_text(), (www / "portal.js").read_text()
     assert "back-to-studio" not in html and "data-studio-link" not in html and "/studio" not in html
-    assert re.findall(r'(?:src|href)="([^"]+)"', html) == ["data:,", "portal.css", "portal.js"]
-    assert js.count("fetch(") == 1 and "fetch('videos.json'" in js and "'/videos" not in js
-    assert "url: 'videos/' + encodeURIComponent(v.filename)" in js
+    assert "data-studio-link" not in html and "/studio" not in html
+    assert "videos.json" in js and "/videos/" not in js
 
 
 @pytest.mark.parametrize("name, old", [(n, old) for n, rules in bp.STUDIO_REWRITES.items() for old, _ in rules])
 def test_studio_build_fails_closed_when_a_rewrite_marker_drifts(content_dir, tmp_path, name, old):
     portal = tmp_path / "portal"
-    shutil.copytree(ROOT / "portal", portal)
+    shutil.copytree(ROOT / "dist/web", portal)
     (portal / name).write_text((portal / name).read_text().replace(old, ""))
     out = tmp_path / "studio"
     with pytest.raises(bp.PublishError, match="exactly one"):
@@ -152,7 +152,7 @@ def test_studio_build_rejects_missing_portal_and_changed_media(content_dir, tmp_
         bp.build_studio(content_dir, tmp_path / "no-portal", tmp_path / "a")
     (content_dir / "pub.mp4").write_bytes(make_mp4(seed=b"swapped"))
     with pytest.raises(bp.PublishError, match="sha256 mismatch"):
-        bp.build_studio(content_dir, ROOT / "portal", tmp_path / "b")
+        bp.build_studio(content_dir, ROOT / "dist/web", tmp_path / "b")
     assert not (tmp_path / "b").exists()
 
 
@@ -162,13 +162,13 @@ def test_studio_build_reverifies_the_copied_bytes(content_dir, tmp_path, monkeyp
     monkeypatch.setattr(bp.shutil, "copyfile", corrupting_copy)
     out = tmp_path / "studio"
     with pytest.raises(bp.PublishError, match="copied media does not match"):
-        bp.build_studio(content_dir, ROOT / "portal", out)
+        bp.build_studio(content_dir, ROOT / "dist/web", out)
     assert not out.exists()
 
 
 def test_studio_build_scans_the_bundle_for_forbidden_content(content_dir, tmp_path):
     portal = tmp_path / "portal"
-    shutil.copytree(ROOT / "portal", portal)
+    shutil.copytree(ROOT / "dist/web", portal)
     (portal / "portal.css").write_text("/* /home/someone/secret */")
     out = tmp_path / "studio"
     with pytest.raises(bp.PublishError, match="forbidden content in Studio bundle"):
@@ -180,7 +180,7 @@ def test_studio_build_with_nothing_public_is_empty_and_serves_no_media(content_d
     manifest = json.loads((content_dir / "videos.json").read_text())
     manifest[0]["visibility"] = "REVIEW_REQUIRED"
     _write_manifest(content_dir, manifest)
-    report = bp.build_studio(content_dir, ROOT / "portal", tmp_path / "studio")
+    report = bp.build_studio(content_dir, ROOT / "dist/web", tmp_path / "studio")
     assert report["published"] == []
     assert (tmp_path / "studio" / "www" / "videos.json").read_text() == "[]"
     assert (tmp_path / "studio" / "nginx" / "media.conf").read_text() == ""
@@ -189,14 +189,14 @@ def test_studio_build_with_nothing_public_is_empty_and_serves_no_media(content_d
 
 def test_cli_builds_each_variant_into_its_default_directory(content_dir, tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
-    assert bp.main(["--variant", "studio", "--content", str(content_dir), "--portal", str(ROOT / "portal")]) == 0
+    assert bp.main(["--variant", "studio", "--content", str(content_dir), "--portal", str(ROOT / "dist/web")]) == 0
     assert "approved media copied and re-verified" in capsys.readouterr().out
     assert (tmp_path / "dist" / "studio" / "media" / "pub.mp4").read_bytes() == PUBLIC_BYTES
-    assert bp.main(["--content", str(content_dir), "--portal", str(ROOT / "portal")]) == 0
+    assert bp.main(["--content", str(content_dir), "--portal", str(ROOT / "dist/web")]) == 0
     assert "(no media copied)" in capsys.readouterr().out
     assert not list((tmp_path / "dist" / "public").rglob("*.mp4"))
     (content_dir / "pub.mp4").write_bytes(b"changed")
-    assert bp.main(["--variant", "studio", "--content", str(content_dir), "--portal", str(ROOT / "portal")]) == 1
+    assert bp.main(["--variant", "studio", "--content", str(content_dir), "--portal", str(ROOT / "dist/web")]) == 1
     assert "BUILD FAILED" in capsys.readouterr().err
 
 
@@ -254,7 +254,7 @@ def mount_under_prefix(out, root):
 def studio(browser, tmp_path, serve_bundle):
     content = studio_content(tmp_path)
     out = tmp_path / "studio-bundle"
-    bp.build_studio(content, ROOT / "portal", out)
+    bp.build_studio(content, ROOT / "dist/web", out)
     base = serve_bundle(mount_under_prefix(out, tmp_path / "site"))
     opened = []
 
@@ -401,7 +401,7 @@ def studio_stack(tmp_path_factory):
     for name in ("Dockerfile.studio", "Dockerfile.studio.dockerignore", ".dockerignore", "nginx.studio.conf"):
         shutil.copy(ROOT / name, ctx)
     shutil.copytree(content, ctx / "content")  # present in the context; the ignore rules must keep it out
-    bp.build_studio(content, ROOT / "portal", ctx / "dist" / "studio")
+    bp.build_studio(content, ROOT / "dist/web", ctx / "dist" / "studio")
     tag = f"omnibioai-videos-studio-test:{uuid.uuid4().hex[:10]}"
     _run("docker", "build", "-q", "-f", "Dockerfile.studio", "-t", tag, ".", cwd=ctx)
     suffix = uuid.uuid4().hex[:10]
@@ -431,7 +431,8 @@ def test_studio_image_contains_only_approved_media_and_no_content_dir(studio_sta
                    "find /usr/share/nginx /etc/nginx/studio -type f | sort").stdout.split()
     assert listing == [
         "/etc/nginx/studio/media.conf",
-        *(f"/usr/share/nginx/html/{n}" for n in ("index.html", "portal.css", "portal.js", "videos.json")),
+        *(f"/usr/share/nginx/html/{n}" for n in
+          ("embed-appearance.js", "index.html", "portal.css", "portal.js", "shared.js", "videos.json")),
         *(f"/usr/share/nginx/media/{r['filename']}" for r in sorted(studio_records(), key=lambda r: r["filename"])),
     ]
 
@@ -440,11 +441,13 @@ def test_studio_image_contains_only_approved_media_and_no_content_dir(studio_sta
 def test_studio_image_serves_the_library_through_the_router(studio_stack):
     site = studio_stack["proxied"]
     status, headers, body = site.get(PREFIX)
-    assert status == 200 and b'src="portal.js"' in body and b"back-to-studio" not in body
+    assert status == 200 and re.search(rb'src="(?:\./)?portal\.js\?v=[0-9a-f]{16}"', body) and b"back-to-studio" not in body
     assert "frame-ancestors 'self'" in headers["content-security-policy"]
     assert headers["x-frame-options"] == "SAMEORIGIN" and headers["x-content-type-options"] == "nosniff"
     assert "access-control-allow-origin" not in headers
     assert site.get(PREFIX + "portal.js")[0] == 200 and site.get(PREFIX + "portal.css")[0] == 200
+    embed_status, embed_headers, _ = site.get(PREFIX + "embed-appearance.js")
+    assert embed_status == 200 and embed_headers["content-type"].startswith("application/javascript")
     catalog = json.loads(site.get(PREFIX + "videos.json")[2])
     assert [v["filename"] for v in catalog] == [r["filename"] for r in studio_records()]
     status, headers, _ = site.request("HEAD", PREFIX + "videos/rna.mp4")
@@ -457,6 +460,9 @@ def test_studio_image_serves_the_library_through_the_router(studio_stack):
     assert status == 301 and headers["location"] == PREFIX
     status, _, body = studio_stack["direct"].get("/health")
     assert status == 200 and body == b'{"status":"ok"}'
+    status, headers, body = site.get(PREFIX + "missing.js")
+    assert status == 404 and not headers["content-type"].startswith("text/html")
+    assert b"<title>OmniBioAI" not in body
 
 
 @pytest.mark.docker

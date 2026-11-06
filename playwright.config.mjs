@@ -10,7 +10,7 @@ export default defineConfig({
       : {},
   },
   webServer: {
-    command: 'python3 -m http.server 4178 --bind 127.0.0.1 --directory portal',
+    command: 'npm run build && python3 -m http.server 4178 --bind 127.0.0.1 --directory dist/web',
     url: 'http://127.0.0.1:4178/',
     reuseExistingServer: false,
   },

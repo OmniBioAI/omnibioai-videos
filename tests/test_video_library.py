@@ -83,7 +83,7 @@ def test_production_public_bundle_links_to_canonical_studio_across_origins(
     content_dir, tmp_path, serve_bundle, browser,
 ):
     out = tmp_path / "production-bundle"
-    bp.build(content_dir, ROOT / "portal", out)
+    bp.build(content_dir, ROOT / "dist/web", out)
     page = browser.new_page()
     page.goto(serve_bundle(_assemble_www(out)))
     link = page.get_by_role("link", name="← Back to Studio")
@@ -99,12 +99,12 @@ def test_build_uses_configured_studio_origin_and_supports_local_development(
 ):
     monkeypatch.setenv("STUDIO_URL", "https://studio-staging.example.org")
     out = tmp_path / "configured-bundle"
-    bp.build(content_dir, ROOT / "portal", out)
+    bp.build(content_dir, ROOT / "dist/web", out)
     html = (out / "www" / "index.html").read_text()
     assert 'href="https://studio-staging.example.org/studio"' in html
 
     out = tmp_path / "local-bundle"
-    bp.build(content_dir, ROOT / "portal", out, studio_url="http://localhost:5173")
+    bp.build(content_dir, ROOT / "dist/web", out, studio_url="http://localhost:5173")
     html = (out / "www" / "index.html").read_text()
     assert 'href="http://localhost:5173/studio"' in html
 
@@ -130,7 +130,7 @@ def test_malformed_or_unsafe_studio_url_fails_before_output_changes(content_dir,
     sentinel = out / "keep.txt"
     sentinel.write_text("untouched")
     with pytest.raises(bp.PublishError, match="STUDIO_URL"):
-        bp.build(content_dir, ROOT / "portal", out, studio_url=value)
+        bp.build(content_dir, ROOT / "dist/web", out, studio_url=value)
     assert sentinel.read_text() == "untouched"
 
 
@@ -304,7 +304,7 @@ def test_nonpublic_metadata_never_reaches_bundle_search_or_autocomplete(content_
     manifest[0].update(category="Platform", tags=["public-discovery"])
     _write_manifest(content_dir, manifest)
     out = tmp_path / "bundle"
-    bp.build(content_dir, ROOT / "portal", out)
+    bp.build(content_dir, ROOT / "dist/web", out)
     blob = "\n".join(p.read_text() for p in out.rglob("*") if p.is_file())
     assert "classified-" not in blob.lower()
     for name in NON_PUBLIC:
@@ -329,7 +329,7 @@ def test_build_projects_only_well_formed_optional_discovery_fields(content_dir, 
                    services=["Nextflow"], modules=["Runner"], workflows=["RNA-seq"], notes="private")
     _write_manifest(content_dir, [entry])
     out = tmp_path / "bundle"
-    bp.build(content_dir, ROOT / "portal", out)
+    bp.build(content_dir, ROOT / "dist/web", out)
     record = json.loads((out / "publication/entries/001.json").read_text())
     assert record["tags"] == ["rna-seq"] and record["category"] == "Workflows"
     assert record["featured"] is True
@@ -338,7 +338,7 @@ def test_build_projects_only_well_formed_optional_discovery_fields(content_dir, 
     assert "keywords" not in record and "notes" not in record
     entry.update(category=[], featured="true", tags={}, duration=float("inf"))
     _write_manifest(content_dir, [entry])
-    bp.build(content_dir, ROOT / "portal", out)
+    bp.build(content_dir, ROOT / "dist/web", out)
     record = json.loads((out / "publication/entries/001.json").read_text())
     assert not {"category", "featured", "tags", "duration"} & record.keys()
 
@@ -349,7 +349,7 @@ def test_new_public_fields_are_secret_scanned(content_dir, tmp_path, field, secr
     value = secret if field == "category" else [secret]
     _write_manifest(content_dir, [_entry("pub.mp4", "PUBLIC", **{field: value})])
     with pytest.raises(bp.PublishError, match="forbidden content"):
-        bp.build(content_dir, ROOT / "portal", tmp_path / "out")
+        bp.build(content_dir, ROOT / "dist/web", tmp_path / "out")
 
 
 # ── YouTube-style home and watch view ───────────────────────────────────────

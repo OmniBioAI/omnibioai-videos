@@ -1,6 +1,8 @@
 content.egg-info/
 *.egg-info/
-dist/
+dist/*
+!dist/web/
+!dist/web/**
 .coverage
 coverage.json
 scripts/__pycache__/

@@ -7,4 +7,4 @@
 set -eu
 : "${OBAI_INPUT_MEDIA_DIR:?x-obai-prebuild must pass MEDIA_DIR (the host content directory)}"
 exec python3 -I scripts/build_public.py --content content --media-dir "$OBAI_INPUT_MEDIA_DIR" \
-    --portal portal --out dist/public
+    --portal dist/web --out dist/public

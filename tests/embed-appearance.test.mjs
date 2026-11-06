@@ -4,9 +4,35 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import test from 'node:test';
 
-const html = fs.readFileSync('portal/index.html', 'utf8');
-const source = fs.readFileSync('portal/embed-appearance.js', 'utf8');
+const html = fs.readFileSync('dist/web/index.html', 'utf8');
+const source = fs.readFileSync('public/embed-appearance.js', 'utf8');
 const bootstrap = html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
+
+test('published React assets share a deterministic cache-busting build identity', () => {
+  const refs = [...html.matchAll(/(?:src|href)="\.\/(portal\.css|embed-appearance\.js|portal\.js|shared\.js)\?v=([0-9a-f]{16})"/g)];
+  assert.deepEqual(new Set(refs.map((match) => match[1])),
+    new Set(['portal.css', 'embed-appearance.js', 'portal.js', 'shared.js']));
+  assert.equal(new Set(refs.map((match) => match[2])).size, 1);
+  const version = refs[0][2];
+  assert.match(fs.readFileSync('dist/web/portal.js', 'utf8'),
+    new RegExp(`\\./shared\\.js\\?v=${version}`));
+});
+
+test('React mount does not depend on optional legacy portal DOM elements', () => {
+  const main = fs.readFileSync('src/main.jsx', 'utf8');
+  const portal = fs.readFileSync('dist/web/portal.js', 'utf8');
+  assert.match(main, /createRoot\(document\.getElementById\("root"\)\)/);
+  assert.doesNotMatch(portal, /getElementById\(["']searchInput["']\)/);
+  assert.doesNotMatch(portal, /getElementById\(["']clearSearch["']\)/);
+});
+
+test('catalog HTTP failures, including 429, render a visible fail-safe state', () => {
+  const source = fs.readFileSync('src/VideoPortal.jsx', 'utf8');
+  assert.match(source, /if \(!response\.ok\)/);
+  assert.match(source, /error\.status = response\.status/);
+  assert.match(source, /error\?\.status === 429/);
+  assert.match(source, /role="alert"/);
+});
 
 function loadProtocol({ referrer = 'https://webstudio.omnibioai.org/workbench', devOrigin = '' } = {}) {
   const listeners = new Map();
@@ -104,7 +130,8 @@ test('vendored design tokens are launcher 1.1.0 without tooling or a nested lock
   assert.equal(metadata.scripts, undefined);
   assert.equal(metadata.devDependencies, undefined);
   assert.equal(fs.existsSync('vendor/omnibioai-design-tokens/package-lock.json'), false);
-  assert.equal(fs.readFileSync('portal/omnibioai-design-tokens.css', 'utf8'), fs.readFileSync('vendor/omnibioai-design-tokens/tokens.css', 'utf8'));
+  assert.match(fs.readFileSync('src/main.jsx', 'utf8'), /vendor\/omnibioai-design-tokens\/tokens\.css/);
+  assert.match(fs.readFileSync('dist/web/portal.css', 'utf8'), /--color-bg:/);
 });
 
 test('CSP is a single always header and permits only Studio as the cross-origin framer', () => {
