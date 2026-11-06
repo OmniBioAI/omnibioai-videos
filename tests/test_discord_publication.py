@@ -98,6 +98,7 @@ def test_video_event_submission_is_signed_unapproved_and_uses_fixed_channel(monk
     assert payload["approved_publication"] is False
     assert payload["destination_channel"] == "tutorials"
     assert request.get_header("Cf-access-client-id") is None
+    assert request.get_header("User-agent") == "omnibioai-discord-publisher/1.0"
 
 
 def test_video_event_rejects_unsafe_config_without_network():
