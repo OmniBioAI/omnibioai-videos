@@ -19,6 +19,48 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
+# Statuses the central router's ingest handler returns for accepted or
+# duplicate events: 200 once delivered, 202 otherwise.
+_ACCEPTED_STATUSES = frozenset({200, 202})
+
+
+class SubmissionError(ValueError):
+    """The router did not durably accept the event; messages carry no secrets."""
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuse redirects so an Access login page can never count as accepted."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+_OPENER = urllib.request.build_opener(_NoRedirect())
+
+
+def _access_headers() -> dict[str, str]:
+    client_id = os.environ.get("DISCORD_EVENT_ACCESS_CLIENT_ID", "").strip()
+    client_secret = os.environ.get("DISCORD_EVENT_ACCESS_CLIENT_SECRET", "").strip()
+    if not client_id and not client_secret:
+        return {}
+    if not client_id or not client_secret:
+        raise SubmissionError("DISCORD_EVENT_ACCESS_CLIENT_ID and DISCORD_EVENT_ACCESS_CLIENT_SECRET must be set together")
+    return {"CF-Access-Client-Id": client_id, "CF-Access-Client-Secret": client_secret}
+
+
+def _check_receipt(status: int, content_type: str, raw: bytes, event_id: str) -> dict:
+    """The single success rule for router submissions."""
+    if status not in _ACCEPTED_STATUSES:
+        raise SubmissionError(f"router did not accept the event: HTTP {status}")
+    if content_type.split(";", 1)[0].strip().lower() != "application/json":
+        raise SubmissionError(f"router response is not JSON (HTTP {status})")
+    try:
+        receipt = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        raise SubmissionError(f"router response is not valid JSON (HTTP {status})") from None
+    if not isinstance(receipt, dict) or receipt.get("event_id") != event_id:
+        raise SubmissionError(f"router receipt does not match the submitted event (HTTP {status})")
+    return receipt
 
 
 def public_video_digests(raw: str | bytes) -> set[str]:
@@ -79,7 +121,7 @@ def _previous_manifest() -> str:
     return previous.stdout
 
 
-def _submit(event: dict[str, str], *, base_url: str, secret: str, commit: str) -> int:
+def _submit(event: dict[str, str], *, base_url: str, secret: str, commit: str) -> dict:
     parsed = urllib.parse.urlsplit(base_url)
     if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
         raise ValueError("Discord event router URL must be an HTTPS origin/path")
@@ -101,19 +143,23 @@ def _submit(event: dict[str, str], *, base_url: str, secret: str, commit: str) -
     body = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     timestamp, nonce = str(int(time.time())), secrets.token_urlsafe(18)
     signature = hmac.new(secret.encode(), timestamp.encode() + b"\n" + nonce.encode() + b"\n" + body, hashlib.sha256).hexdigest()
+    headers = {
+        "Content-Type": "application/json", "X-Omni-Discord-Source": "video",
+        "X-Omni-Discord-Timestamp": timestamp, "X-Omni-Discord-Nonce": nonce,
+        "X-Omni-Discord-Signature": "v1=" + signature,
+    }
+    headers.update(_access_headers())
     request = urllib.request.Request(
-        base_url.rstrip("/") + "/integrations/discord/events", data=body, method="POST",
-        headers={
-            "Content-Type": "application/json", "X-Omni-Discord-Source": "video",
-            "X-Omni-Discord-Timestamp": timestamp, "X-Omni-Discord-Nonce": nonce,
-            "X-Omni-Discord-Signature": "v1=" + signature,
-        },
+        base_url.rstrip("/") + "/integrations/discord/events", data=body, method="POST", headers=headers,
     )
     try:
-        with urllib.request.urlopen(request, timeout=8) as response:
-            return response.status
+        with _OPENER.open(request, timeout=8) as response:
+            status, content_type, raw = response.status, response.headers.get("Content-Type", ""), response.read()
     except urllib.error.HTTPError as exc:
-        return exc.code
+        if 300 <= exc.code < 400:
+            raise SubmissionError(f"router redirect refused: HTTP {exc.code}") from None
+        raise SubmissionError(f"router rejected the event: HTTP {exc.code}") from None
+    return _check_receipt(status, content_type, raw, event["event_id"])
 
 
 def main() -> int:
@@ -130,14 +176,14 @@ def main() -> int:
         if not re.fullmatch(r"[0-9a-f]{40}", commit):
             raise ValueError("GitHub commit identity is invalid")
         for event in events:
-            status = _submit(event, base_url=base_url, secret=secret, commit=commit)
-            if status not in {200, 202}:
-                print(f"video Discord event rejected: HTTP {status}", file=sys.stderr)
-                return 1
+            _submit(event, base_url=base_url, secret=secret, commit=commit)
             print(json.dumps({
                 "event_id": event["event_id"], "event_type": event["event_type"],
                 "destination_channel": "tutorials", "delivery_status": "queued_for_approval",
             }, sort_keys=True))
+    except SubmissionError as exc:
+        print(f"video Discord event submission failed: {exc}", file=sys.stderr)
+        return 1
     except (OSError, ValueError, subprocess.SubprocessError) as exc:
         print(f"video Discord event submission failed: {type(exc).__name__}", file=sys.stderr)
         return 1
